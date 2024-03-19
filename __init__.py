@@ -1,1 +1,0 @@
-"""The epg Browser integration."""
