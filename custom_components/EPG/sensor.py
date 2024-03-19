@@ -41,7 +41,7 @@ async def async_setup_platform(
     """Set up the EPG sensor platform."""
 
     _config=config
-    guide={}
+    guides={}
     def read_json():
         with open(_JSON_FILE) as f:
           data = json.load(f)
@@ -59,10 +59,11 @@ async def async_setup_platform(
         """track_channel"""
         _LOGGER.debug("track_channel")
         channel_id=data.data.get("channel_id")
-        json = read_json()
-        json[channel_id] = channel_id
-        channel=guide.get_channel(channel_id)
+        file=data.data.get("file")
+        channel=guides.get(file).get_channel(channel_id)
         async_add_entities([ChannelSensor(hass,_config,  channel.name(), channel)], True)
+        json = read_json()
+        json[channel_id] = file
         write_json(json)
 
 
@@ -70,8 +71,7 @@ async def async_setup_platform(
         _LOGGER.debug("remove_channel")
         channel_id=in_data.data.get("channel_id")
         registry = get_entity_registry(hass)
-        if f'sensor.epg_{channel_id}'.lower() in registry.entities:
-            registry.async_remove(f'sensor.epg_{channel_id}'.lower())
+        registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == channel_id )))
         data = read_json()
         del data[channel_id]
         write_json(data)
@@ -82,12 +82,14 @@ async def async_setup_platform(
     entities = []
     for file in _config.get("files"):
         guide = await get_guide(hass, _config, file)
-
-        for ch in read_json():
-            channel=guide.get_channel(ch)
-            entities.append(ChannelSensor(hass,_config, channel.name(), channel))
+        guides[file]=guide
+        json_data =read_json()
+        for ch in json_data:
+            if file == json_data.get(ch):
+                channel=guide.get_channel(ch)
+                entities.append(ChannelSensor(hass,_config, channel.name(), channel))
         entities.append(EPGSensor(hass,_config, file, guide))
-        async_add_entities(entities, True)
+    async_add_entities(entities, True)
 
 
 
