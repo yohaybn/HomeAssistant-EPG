@@ -4,6 +4,13 @@ track_channel:
   name: track_channel
   description: Add new Channel.
   fields:
+    file:
+      name: file
+      description: the name of file that contains the channel
+      required: true
+      example: "israelpremium"
+      selector:
+        text:
     channel_id:
       name: channel_id
       description: Id of channel as apper in sensor.epg_{filename} Attributes
@@ -18,6 +25,7 @@ remove_channel:
   name: remove_channel
   description: Remove Channel.
   fields:
+   
     channel_id:
       name: channel_id
       description: Id of channel as apper in sensor.epg_{filename} Attributes
