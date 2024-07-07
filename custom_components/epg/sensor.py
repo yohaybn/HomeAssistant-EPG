@@ -43,6 +43,7 @@ async def async_setup_platform(
     _config=config
     guides={}
     def read_json():
+
         with open(_JSON_FILE) as f:
           data = json.load(f)
         return data
@@ -62,9 +63,9 @@ async def async_setup_platform(
         file=data.data.get("file")
         channel=guides.get(file).get_channel(channel_id)
         async_add_entities([ChannelSensor(hass,_config,  channel.name(), channel)], True)
-        json = read_json()
+        json = await hass.async_add_executor_job(read_json)
         json[channel_id] = file
-        write_json(json)
+        await hass.async_add_executor_job(write_json,json)
 
 
     async def remove_channel(in_data):
@@ -72,9 +73,9 @@ async def async_setup_platform(
         channel_id=in_data.data.get("channel_id")
         registry = get_entity_registry(hass)
         registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == channel_id )))
-        data = read_json()
+        data = await hass.async_add_executor_job(read_json)
         del data[channel_id]
-        write_json(data)
+        await hass.async_add_executor_job(write_json,json)
 
 
 
@@ -83,7 +84,7 @@ async def async_setup_platform(
     for file in _config.get("files"):
         guide = await get_guide(hass, _config, file)
         guides[file]=guide
-        json_data =read_json()
+        json_data =await hass.async_add_executor_job(read_json)
         for ch in json_data:
             if file == json_data.get(ch):
                 channel=guide.get_channel(ch)
@@ -105,14 +106,23 @@ async def async_setup_platform(
         "remove_channel",
         remove_channel,
     )
-
+def read_file(file):
+    with open(file, "r") as guide_file:
+        content = guide_file.readlines()
+    content = "".join(content)
+    return content
+def write_file(file,data):
+    with open(file, "w") as file:
+        file.write(data)
+        file.close()
 async def get_guide(hass, _config, file):
     _GUIDE_URL = f"https://www.bevy.be/bevyfiles/{file}.xml"
     _GUIDE_FILE = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
     if os.path.isfile(_GUIDE_FILE):
-        with open(_GUIDE_FILE, "r") as guide_file:
-            content = guide_file.readlines()
-        content = "".join(content)
+        #with open(_GUIDE_FILE, "r") as guide_file:
+        #    content = guide_file.readlines()
+        #content = "".join(content)
+        content= await hass.async_add_executor_job(read_file, _GUIDE_FILE)
         guide = Guide(content,_config.get("timezone"))
     else:
         _LOGGER.debug("fetching the guide first time")
@@ -133,9 +143,10 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
         data = await response.text()
         if data is not None:
             if "channel" in data:
-                with open(file, "w") as file:
-                    file.write(data)
-                    file.close()
+                await hass.async_add_executor_job(write_file, file,data)
+                #with open(file, "w") as file:
+                #    file.write(data)
+                #    file.close()
                 guide = Guide(data,_config.get("timezone"))
             else:
                 _LOGGER.error(data)
@@ -211,15 +222,17 @@ class EPGSensor(SensorEntity):
 
     @property
     def state(self):
-
-        return len(self._data.channels())
+        if self._data.channels():
+            return len(self._data.channels())
+        return 0
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
         channels={}
-        for ch in self._data.channels():
-            channel = {"name":ch.name(),"id":ch.id}
-            channels[ch.id]= channel
+        if self._data.channels():
+            for ch in self._data.channels():
+                channel = {"name":ch.name(),"id":ch.id}
+                channels[ch.id]= channel
         attributes={"channels":channels}
         return attributes
 
