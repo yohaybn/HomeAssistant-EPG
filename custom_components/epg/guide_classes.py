@@ -1,10 +1,7 @@
 from datetime import datetime, date, timedelta
-
 from bs4 import BeautifulSoup
-
 import time
-
-from pytz import timezone
+LOCAL_TIMEZONE = datetime.now().astimezone().tzinfo
 
 
 class Programme:
@@ -51,8 +48,7 @@ class Channel:
 
     def get_programmes_from_now_by_start(self) -> dict[str, str]:
         ret = {}
-        tz = timezone(Guide.tz)
-        now = datetime.now(tz)
+        now = datetime.now(LOCAL_TIMEZONE)
         for programme in self._programmes:
             if programme._start >= now:
                 ret[programme.start_hour] = (
@@ -66,8 +62,7 @@ class Channel:
         ret = {}
         ret["today"] = {}
 
-        tz = timezone(Guide.tz)
-        now = datetime.now(tz)
+        now = datetime.now(LOCAL_TIMEZONE)
         for programme in self._programmes:
             if (
                 programme._start >= now
@@ -84,8 +79,7 @@ class Channel:
         ret = {}
         ret["today"] = {}
         ret["tommorrow"] = {}
-        tz = timezone(Guide.tz)
-        now = datetime.now(tz)
+        now = datetime.now(LOCAL_TIMEZONE)
         for programme in self._programmes:
             if programme._start >= now:
                 if programme._start.date() == datetime.today().date():
@@ -102,8 +96,7 @@ class Channel:
         return ret
 
     def get_current_programme(self) -> Programme:
-        tz = timezone(Guide.tz)
-        now = datetime.now(tz)
+        now = datetime.now(LOCAL_TIMEZONE)
         return next(
             (
                 programme
@@ -123,11 +116,9 @@ class Channel:
             return "Unavilable"
         return p.desc
 class Guide:
-    tz="Asia/Jerusalem"
-    def __init__(self, text,tz="Asia/Jerusalem") -> None:
+    def __init__(self, text) -> None:
         """Initialize the class"""
         self._channels = []
-        self.tz=tz
         soup = BeautifulSoup(text, "xml")
 
         for channel in soup.find_all("channel"):
