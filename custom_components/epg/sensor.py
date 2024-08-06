@@ -123,7 +123,7 @@ async def get_guide(hass, _config, file):
         #    content = guide_file.readlines()
         #content = "".join(content)
         content= await hass.async_add_executor_job(read_file, _GUIDE_FILE)
-        guide = Guide(content,_config.get("timezone"))
+        guide = Guide(content)
     else:
         _LOGGER.debug("fetching the guide first time")
         os.makedirs(os.path.dirname(_GUIDE_FILE), exist_ok=True)
@@ -147,7 +147,7 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
                 #with open(file, "w") as file:
                 #    file.write(data)
                 #    file.close()
-                guide = Guide(data,_config.get("timezone"))
+                guide = Guide(data)
             else:
                 _LOGGER.error(data)
         else:
