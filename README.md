@@ -26,14 +26,13 @@ To create sensors with television programming for the channels add
         files:
           - israelpremium
           - chinapremium2
-        timezone: "Asia/Jerusalem"
     ...
 
 | Name | Type | Default |  Description |
 | --- | --- | --- | --- | 
 | `full_schedule` | bool | false |  add full schedule to attributes (2 days). can create issues with recorder (`exceed maximum size of 16384 bytes. This can cause database performance issues; Attributes will not be stored`) |
 | `files` | string array | **required** | file names which you want to use to create EPG. files name taken from  [here](https://www.bevy.be/epg-guide/), for example for https://www.bevy.be/bevyfiles/argentinapremium2.xml file enter `argentinapremium2` |
-| `timezone` | string | **required** | time zone can found [here](https://timezonedb.com/time-zones) |
+
 
 this will create sensor for each file contains the list of channels that can be tracked using service `track_channel`.
 
