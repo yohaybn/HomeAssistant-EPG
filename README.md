@@ -3,7 +3,7 @@ HomeAssistant integration for EPG (Electronic Program Guide) sensors using  [bev
 
 The integration will provide Program Guide in sensors.
 
-## Installation
+## Installation 
 
 Until the repository enters the default repository of HACS, you can add the repository to a custom repository in HACS
 https://github.com/yohaybn/HomeAssistant-EPG
