@@ -6,5 +6,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/yohaybn/HomeAssistant-EPG/issues",
   "requirements": ["beautifulsoup4", "lxml"],
-  "version": "1.0.1"
+  "version": "1.1.0"
 }
