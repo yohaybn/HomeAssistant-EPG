@@ -1,6 +1,7 @@
 """Support for  HA_EPG."""
 from __future__ import annotations
 import logging
+
 from typing import Final
 import json
 import os
@@ -123,7 +124,7 @@ async def get_guide(hass, _config, file):
         #    content = guide_file.readlines()
         #content = "".join(content)
         content= await hass.async_add_executor_job(read_file, _GUIDE_FILE)
-        guide = Guide(content)
+        guide = Guide(content,hass.config.time_zone)
     else:
         _LOGGER.debug("fetching the guide first time")
         os.makedirs(os.path.dirname(_GUIDE_FILE), exist_ok=True)
@@ -136,6 +137,7 @@ async def get_guide(hass, _config, file):
 
 async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
     session = async_get_clientsession(hass)
+    _LOGGER.debug("timezone: "+hass.config.time_zone)
     guide = None
     try:
         response = await session.get(url)
@@ -147,7 +149,7 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
                 #with open(file, "w") as file:
                 #    file.write(data)
                 #    file.close()
-                guide = Guide(data)
+                guide = Guide(data,hass.config.time_zone)
             else:
                 _LOGGER.error(data)
         else:
