@@ -1,7 +1,10 @@
 from datetime import datetime, date, timedelta
 from bs4 import BeautifulSoup
 import time
-LOCAL_TIMEZONE = datetime.now().astimezone().tzinfo
+import logging
+import pytz 
+import logging
+_LOGGER = logging.getLogger(__name__)
 
 
 class Programme:
@@ -9,10 +12,11 @@ class Programme:
         """Initialize the sensor."""
         self._start = datetime.strptime(start, "%Y%m%d%H%M%S %z")
         self._stop = datetime.strptime(stop, "%Y%m%d%H%M%S %z")
-        self.start_hour = self._start.strftime("%H:%M")
-        self.end_hour = self._stop.strftime("%H:%M")
+        self.start_hour = self._start.astimezone(Guide.TIMEZONE).strftime("%H:%M")
+        self.end_hour = self._stop.astimezone(Guide.TIMEZONE).strftime("%H:%M")
         self.title = title
         self.desc = desc
+        #_LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
 
 
 class Channel:
@@ -22,6 +26,9 @@ class Channel:
         self._name = name
         self.id = id
         self._lang = lang
+        
+        
+
     def name(self) -> str:
         return self._name
     def id(self) -> str:
@@ -48,7 +55,7 @@ class Channel:
 
     def get_programmes_from_now_by_start(self) -> dict[str, str]:
         ret = {}
-        now = datetime.now(LOCAL_TIMEZONE)
+        now = Guide.TIMEZONE.localize(datetime.now())
         for programme in self._programmes:
             if programme._start >= now:
                 ret[programme.start_hour] = (
@@ -62,12 +69,13 @@ class Channel:
         ret = {}
         ret["today"] = {}
 
-        now = datetime.now(LOCAL_TIMEZONE)
+        now = Guide.TIMEZONE.localize(datetime.now())
         for programme in self._programmes:
             if (
                 programme._start >= now
                 and programme._start.date() == datetime.today().date()
             ):
+                #_LOGGER.debug(f"start: {programme._start}now: {now}")
 
                 obj = {}
                 obj["title"] = programme.title
@@ -79,7 +87,7 @@ class Channel:
         ret = {}
         ret["today"] = {}
         ret["tommorrow"] = {}
-        now = datetime.now(LOCAL_TIMEZONE)
+        now = Guide.TIMEZONE.localize(datetime.now())
         for programme in self._programmes:
             if programme._start >= now:
                 if programme._start.date() == datetime.today().date():
@@ -96,7 +104,7 @@ class Channel:
         return ret
 
     def get_current_programme(self) -> Programme:
-        now = datetime.now(LOCAL_TIMEZONE)
+        now = Guide.TIMEZONE.localize(datetime.now())
         return next(
             (
                 programme
@@ -116,9 +124,11 @@ class Channel:
             return "Unavilable"
         return p.desc
 class Guide:
-    def __init__(self, text) -> None:
+    TIMEZONE=pytz.timezone("Asia/Jerusalem")
+    def __init__(self, text,time_zone) -> None:
         """Initialize the class"""
         self._channels = []
+        self.TIMEZONE=pytz.timezone(time_zone)
         soup = BeautifulSoup(text, "xml")
 
         for channel in soup.find_all("channel"):
