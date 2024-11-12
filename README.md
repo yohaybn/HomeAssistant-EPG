@@ -1,22 +1,40 @@
 # HomeAssistant-EPG
-HomeAssistant integration for EPG (Electronic Program Guide) sensors using  [bevy.be EPG guide](https://www.bevy.be/epg-guide/). 
 
-The integration will provide Program Guide in sensors.
+Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [Bevy.be EPG guide](https://www.bevy.be/epg-guide/). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
 
+## Features
+- Retrieve EPG data from Bevy.be to create program guide sensors in Home Assistant.
+- Supports creating custom EPG files with specific channels for personalized tracking.
+- Easy integration with Home Assistant's Lovelace UI to display TV programming data.
+
+## Prerequisites
+- **Home Assistant**: Ensure you have Home Assistant installed.
+- **HACS**: [Home Assistant Community Store](https://hacs.xyz/) (recommended for easy installation).
+- **Bevy.be Account**: Required if using custom EPG files.
+  
 ## Installation 
 
-Until the repository enters the default repository of HACS, you can add the repository to a custom repository in HACS
-https://github.com/yohaybn/HomeAssistant-EPG
+### Installation via HACS (Recommended)
+1. Open HACS in your Home Assistant dashboard.
+2. Until this repository is part of HACS by default, you need to add it as a custom repository.
+3. Go to *Integrations* > *Add custom repository* and enter:  ``` https://github.com/yohaybn/HomeAssistant-EPG ```
 
-![custom_repo.png](/images/custom_repo.png)
+
+![Adding custom repository](/images/custom_repo.png)
+
+4. Once added, search for "HomeAssistant-EPG" in HACS and install it.
 
 [![My Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=HomeAssistant-EPG&owner=yohaybn)
 
-Installation via [HACS](https://hacs.xyz/) (recommended) or by copying  `custom_components/EPG` into your Home Assistant configuration directory.
+### Manual Installation
+1. Download the repository.
+2. Copy the `custom_components/EPG` folder into your Home Assistant configuration directory under `custom_components`.
+
+
 
 ## Configuration
 
-To create sensors with television programming for the channels add 
+To configure EPG sensors for channels, add the following example entry to your `configuration.yaml` file:
 
     # Example configuration.yaml entry
     ...
@@ -33,22 +51,23 @@ To create sensors with television programming for the channels add
 
 | Name | Type | Default |  Description |
 | --- | --- | --- | --- | 
-| `full_schedule` | bool | false |  add full schedule to attributes (2 days). can create issues with recorder (`exceed maximum size of 16384 bytes. This can cause database performance issues; Attributes will not be stored`) |
-| `files` | file object array| **required** | array of file object (see table below) |
+| `full_schedule` | bool | false |  Adds the full schedule (2 days) to attributes. May cause database issues with larger data (exceed maximum size of 16384 bytes) in Home Assistant. |
+| `files` | file object array| **required** | Array of file objects. Each file object specifies an EPG file source (details below). |
 
 | Name | Type | Default |  Description |
 | --- | --- | --- | --- | 
-| `file` | string | **required** | file names which you want to use to create EPG. files name taken from  [here](https://www.bevy.be/epg-guide/), for example for https://www.bevy.be/bevyfiles/argentinapremium2.xml file enter `argentinapremium2` |
-| `name` | string | file name |  sensor name for the file. will be with epg_ prefix. (e.g epg_all_israel) |
-| `generated` | bool | false | flag for custom files, if true sensor will be create each channel in file. see below for more deatils  |
+| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.bevy.be/epg-guide/). |
+| `name` | string | file name |  Name of the sensor for the file. A prefix of epg_ will be added (e.g., epg_all_israel).|
+| `generated` | bool | false | Set to true if using custom files from Bevy.be. This will create a separate sensor for each channel in the file. See "Custom Files" for details. |
 
 
 this will create sensor for each file contains the list of channels that can be tracked using service `track_channel`.
 
 ### Custom files
-Thanks to the new feature bevy.be realeasd you can create custom file with channel that you choose.
-To create custom file you need to open free account [here](https://www.bevy.be/app/register.php) and choose your channels.
-once file generted  (once a day) you can use it. just put the ID that you get e.g. 122DjgdtAA (take it from URL that gennerated )
+Bevy.be allows the creation of custom EPG files with selected channels. To create a custom file:
+1. Register for a free account at Bevy.be.
+2. Select channels to include in your custom EPG file.
+3. Once generated (updated daily), use the unique file ID (e.g., 122DjgdtAA), visible in the generated URL.
 
 
 ## Services
@@ -72,7 +91,10 @@ The following services are implemented by the component:
 
 
 
-## television programming lovelace card example
+## Displaying Television Programming in Lovelace
+
+Use the following example to display today’s programming on a Lovelace card:
+
 ```
 type: markdown
 content: |
@@ -87,4 +109,6 @@ content: |
 title: today
 
 ```
-
+## Troubleshooting
+- **Full Schedule Error**: If using full_schedule: true, you may encounter size limit issues in Home Assistant’s database. If so, set full_schedule: false.
+- **Missing Channels**: Ensure you’re using the correct file ID, especially for custom files.
