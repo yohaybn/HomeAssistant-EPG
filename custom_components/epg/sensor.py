@@ -79,18 +79,24 @@ async def async_setup_platform(
         await hass.async_add_executor_job(write_json,json)
 
 
-
-
     entities = []
-    for file in _config.get("files"):
-        guide = await get_guide(hass, _config, file)
+    for row in _config.get("files"):
+        guide = await get_guide(hass, _config, row)
+        file= row.get("file")
+        generated= row.get("generated") or false
+        name= row.get("name") or file
         guides[file]=guide
-        json_data =await hass.async_add_executor_job(read_json)
-        for ch in json_data:
-            if file == json_data.get(ch):
-                channel=guide.get_channel(ch)
+        
+        if generated:
+            for channel  in guide.channels():
                 entities.append(ChannelSensor(hass,_config, channel.name(), channel))
-        entities.append(EPGSensor(hass,_config, file, guide))
+        else:
+            json_data =await hass.async_add_executor_job(read_json)
+            for ch in json_data:
+                if file == json_data.get(ch):
+                    channel=guide.get_channel(ch)
+                    entities.append(ChannelSensor(hass,_config, channel.name(), channel))
+        entities.append(EPGSensor(hass,_config, name, guide))
     async_add_entities(entities, True)
 
 
@@ -116,8 +122,15 @@ def write_file(file,data):
     with open(file, "w") as file:
         file.write(data)
         file.close()
-async def get_guide(hass, _config, file):
-    _GUIDE_URL = f"https://www.bevy.be/bevyfiles/{file}.xml"
+async def get_guide(hass, _config, row):
+
+    _LOGGER.debug(row.get("generated"))
+    _LOGGER.debug(row.get("file"))
+    file= row.get("file")
+    if row.get("generated"):
+        _GUIDE_URL = f"https://www.bevy.be/generate/{file}.xml"
+    else:
+        _GUIDE_URL = f"https://www.bevy.be/bevyfiles/{file}.xml"
     _GUIDE_FILE = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
     if os.path.isfile(_GUIDE_FILE):
         #with open(_GUIDE_FILE, "r") as guide_file:
