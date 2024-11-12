@@ -83,7 +83,7 @@ async def async_setup_platform(
     for row in _config.get("files"):
         guide = await get_guide(hass, _config, row)
         file= row.get("file")
-        generated= row.get("generated") or false
+        generated= row.get("generated") or False
         name= row.get("name") or file
         guides[file]=guide
         
