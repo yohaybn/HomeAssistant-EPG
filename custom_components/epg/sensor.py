@@ -128,9 +128,9 @@ async def get_guide(hass, _config, row):
     _LOGGER.debug(row.get("file"))
     file= row.get("file")
     if row.get("generated"):
-        _GUIDE_URL = f"https://www.bevy.be/generate/{file}.xml"
+        _GUIDE_URL = f"https://www.open-epg.com/generate/{file}.xml"
     else:
-        _GUIDE_URL = f"https://www.bevy.be/bevyfiles/{file}.xml"
+        _GUIDE_URL = f"https://www.open-epg.com/files/{file}.xml"
     _GUIDE_FILE = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
     if os.path.isfile(_GUIDE_FILE):
         #with open(_GUIDE_FILE, "r") as guide_file:
