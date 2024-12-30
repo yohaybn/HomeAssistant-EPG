@@ -1,16 +1,20 @@
 # HomeAssistant-EPG
 
-Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [Bevy.be EPG guide](https://www.bevy.be/epg-guide/). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
+Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [open-epg.com EPG guide](https://www.open-epg.com/epg-guide/). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
+
+## EPG Source Update
+
+The integration now uses open-epg.com as its EPG data source. This change was implemented because bevy.be, the previous provider, has transitioned their services. This update is seamless for users and requires no configuration changes.
 
 ## Features
-- Retrieve EPG data from Bevy.be to create program guide sensors in Home Assistant.
+- Retrieve EPG data from open-epg.com to create program guide sensors in Home Assistant.
 - Supports creating custom EPG files with specific channels for personalized tracking.
 - Easy integration with Home Assistant's Lovelace UI to display TV programming data.
 
 ## Prerequisites
 - **Home Assistant**: Ensure you have Home Assistant installed.
 - **HACS**: [Home Assistant Community Store](https://hacs.xyz/) (recommended for easy installation).
-- **Bevy.be Account**: Required if using custom EPG files.
+- **open-epg.com Account**: Required if using custom EPG files.
   
 ## Installation 
 
@@ -56,16 +60,16 @@ To configure EPG sensors for channels, add the following example entry to your `
 
 | Name | Type | Default |  Description |
 | --- | --- | --- | --- | 
-| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.bevy.be/epg-guide/). |
+| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.open-epg.com/epg-guide/). |
 | `name` | string | file name |  Name of the sensor for the file. A prefix of epg_ will be added (e.g., epg_all_israel).|
-| `generated` | bool | false | Set to true if using custom files from Bevy.be. This will create a separate sensor for each channel in the file. See "Custom Files" for details. |
+| `generated` | bool | false | Set to true if using custom files from open-epg.com. This will create a separate sensor for each channel in the file. See "Custom Files" for details. |
 
 
 this will create sensor for each file contains the list of channels that can be tracked using service `track_channel`.
 
 ### Custom files
-Bevy.be allows the creation of custom EPG files with selected channels. To create a custom file:
-1. Register for a free account at Bevy.be.
+open-epg.com allows the creation of custom EPG files with selected channels. To create a custom file:
+1. Register for a free account at open-epg.com.
 2. Select channels to include in your custom EPG file.
 3. Once generated (updated daily), use the unique file ID (e.g., 122DjgdtAA), visible in the generated URL.
 
