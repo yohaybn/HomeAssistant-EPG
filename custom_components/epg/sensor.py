@@ -19,6 +19,8 @@ from homeassistant.helpers.entity_registry import async_get as get_entity_regist
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 import aiohttp
+import pytz 
+
 from .const import (
     DOMAIN,
     ICON,
@@ -88,8 +90,9 @@ async def async_setup_platform(
         guides[file]=guide
         
         if generated:
-            for channel  in guide.channels():
-                entities.append(ChannelSensor(hass,_config, channel.name(), channel))
+            if guide is not None:
+                for channel  in guide.channels():
+                    entities.append(ChannelSensor(hass,_config, channel.name(), channel))
         else:
             json_data =await hass.async_add_executor_job(read_json)
             for ch in json_data:
@@ -133,11 +136,9 @@ async def get_guide(hass, _config, row):
         _GUIDE_URL = f"https://www.open-epg.com/files/{file}.xml"
     _GUIDE_FILE = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
     if os.path.isfile(_GUIDE_FILE):
-        #with open(_GUIDE_FILE, "r") as guide_file:
-        #    content = guide_file.readlines()
-        #content = "".join(content)
         content= await hass.async_add_executor_job(read_file, _GUIDE_FILE)
-        guide = Guide(content,hass.config.time_zone)
+        time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
+        guide = Guide(content,time_zone)
     else:
         _LOGGER.debug("fetching the guide first time")
         os.makedirs(os.path.dirname(_GUIDE_FILE), exist_ok=True)
@@ -151,6 +152,7 @@ async def get_guide(hass, _config, row):
 async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
     session = async_get_clientsession(hass)
     _LOGGER.debug("timezone: "+hass.config.time_zone)
+    time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
     guide = None
     try:
         response = await session.get(url)
@@ -159,10 +161,7 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
         if data is not None:
             if "channel" in data:
                 await hass.async_add_executor_job(write_file, file,data)
-                #with open(file, "w") as file:
-                #    file.write(data)
-                #    file.close()
-                guide = Guide(data,hass.config.time_zone)
+                guide = Guide(data,time_zone)
             else:
                 _LOGGER.error(data)
         else:
@@ -237,17 +236,19 @@ class EPGSensor(SensorEntity):
 
     @property
     def state(self):
-        if self._data.channels():
-            return len(self._data.channels())
+        if self._data is not None:
+            if self._data.channels():
+                return len(self._data.channels())
         return 0
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
         channels={}
-        if self._data.channels():
-            for ch in self._data.channels():
-                channel = {"name":ch.name(),"id":ch.id}
-                channels[ch.id]= channel
+        if self._data is not None:
+          if self._data.channels():
+              for ch in self._data.channels():
+                  channel = {"name":ch.name(),"id":ch.id}
+                  channels[ch.id]= channel
         attributes={"channels":channels}
         return attributes
 
