@@ -86,7 +86,7 @@ class Channel:
     def get_programmes_per_day(self) -> dict[str, str]:
         ret = {}
         ret["today"] = {}
-        ret["tommorrow"] = {}
+        ret["tomorrow"] = {}
         now = Guide.TIMEZONE.localize(datetime.now())
         for programme in self._programmes:
             if programme._start >= now:
@@ -99,7 +99,7 @@ class Channel:
                     obj = {}
                     obj["title"] = programme.title
                     obj["desc"] = programme.desc
-                    ret["tommorrow"][programme.start_hour] = obj
+                    ret["tomorrow"][programme.start_hour] = obj
 
         return ret
 
