@@ -3,29 +3,32 @@ from bs4 import BeautifulSoup
 import time
 import logging
 import pytz 
-import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class Programme:
-    def __init__(self, start, stop, title, desc) -> None:
+    def __init__(self, start, stop, title, desc,time_zone) -> None:
         """Initialize the sensor."""
+        
+        #_LOGGER.debug(f"timezone: {time_zone}")
         self._start = datetime.strptime(start, "%Y%m%d%H%M%S %z")
         self._stop = datetime.strptime(stop, "%Y%m%d%H%M%S %z")
-        self.start_hour = self._start.astimezone(Guide.TIMEZONE).strftime("%H:%M")
-        self.end_hour = self._stop.astimezone(Guide.TIMEZONE).strftime("%H:%M")
+        self.start_hour = self._start.astimezone(time_zone).strftime("%H:%M")
+        self.end_hour = self._stop.astimezone(time_zone).strftime("%H:%M")
         self.title = title
         self.desc = desc
         #_LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
 
 
 class Channel:
-    def __init__(self, id, name, lang) -> None:
+    def __init__(self, id, name, lang,time_zone) -> None:
         """Initialize the sensor."""
         self._programmes = []
         self._name = name
         self.id = id
         self._lang = lang
+        self._time_zone=time_zone
         
         
 
@@ -55,7 +58,7 @@ class Channel:
 
     def get_programmes_from_now_by_start(self) -> dict[str, str]:
         ret = {}
-        now = Guide.TIMEZONE.localize(datetime.now())
+        now = self._time_zone.localize(datetime.now())
         for programme in self._programmes:
             if programme._start >= now:
                 ret[programme.start_hour] = (
@@ -69,14 +72,12 @@ class Channel:
         ret = {}
         ret["today"] = {}
 
-        now = Guide.TIMEZONE.localize(datetime.now())
+        now = self._time_zone.localize(datetime.now())
         for programme in self._programmes:
             if (
                 programme._start >= now
                 and programme._start.date() == datetime.today().date()
             ):
-                #_LOGGER.debug(f"start: {programme._start}now: {now}")
-
                 obj = {}
                 obj["title"] = programme.title
                 obj["desc"] = programme.desc
@@ -87,7 +88,7 @@ class Channel:
         ret = {}
         ret["today"] = {}
         ret["tomorrow"] = {}
-        now = Guide.TIMEZONE.localize(datetime.now())
+        now = self._time_zone.localize(datetime.now())
         for programme in self._programmes:
             if programme._start >= now:
                 if programme._start.date() == datetime.today().date():
@@ -104,7 +105,7 @@ class Channel:
         return ret
 
     def get_current_programme(self) -> Programme:
-        now = Guide.TIMEZONE.localize(datetime.now())
+        now = self._time_zone.localize(datetime.now())
         return next(
             (
                 programme
@@ -124,16 +125,16 @@ class Channel:
             return "Unavilable"
         return p.desc
 class Guide:
-    TIMEZONE=pytz.timezone("Asia/Jerusalem")
+    TIMEZONE=None
     def __init__(self, text,time_zone) -> None:
         """Initialize the class"""
         self._channels = []
-        self.TIMEZONE=pytz.timezone(time_zone)
+        self.TIMEZONE=time_zone
         soup = BeautifulSoup(text, "xml")
 
         for channel in soup.find_all("channel"):
             display_name = next(channel.children)
-            _channel = Channel(channel["id"], display_name.text, display_name.get("lang"))
+            _channel = Channel(channel["id"], display_name.text, display_name.get("lang"),time_zone)
             for prog in soup.find_all("programme", {"channel": channel["id"]}):
                 children = prog.children
                 title = next(children).text
@@ -141,7 +142,7 @@ class Guide:
                     desc = next(children).text
                 except:
                     desc=""
-                _prog = Programme(prog["start"], prog["stop"], title, desc)
+                _prog = Programme(prog["start"], prog["stop"], title, desc,time_zone)
                 _channel.add_programme(_prog)
             self.add_cahnnel(_channel)
 
