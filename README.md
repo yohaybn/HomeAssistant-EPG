@@ -1,6 +1,6 @@
 # HomeAssistant-EPG
 
-Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [open-epg.com EPG guide](https://www.open-epg.com/epg-guide/). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
+Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [open-epg.com EPG guide](https://www.open-epg.com/app/index.php). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
 
 ## EPG Source Update
 
@@ -60,7 +60,7 @@ To configure EPG sensors for channels, add the following example entry to your `
 
 | Name | Type | Default |  Description |
 | --- | --- | --- | --- | 
-| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.open-epg.com/epg-guide/). |
+| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.open-epg.com/app/index.php). |
 | `name` | string | file name |  Name of the sensor for the file. A prefix of epg_ will be added (e.g., epg_all_israel).|
 | `generated` | bool | false | Set to true if using custom files from open-epg.com. This will create a separate sensor for each channel in the file. See "Custom Files" for details. |
 
