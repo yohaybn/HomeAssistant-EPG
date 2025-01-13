@@ -159,7 +159,9 @@ class Guide:
     def is_need_to_update(self) -> bool:
         """check if need to take new guide from web. (take once a day- guide is for 2 days)"""
         channel = self._channels[0]
-        return not ( channel._programmes and
+        return not ( channel._programmes and(
             channel._programmes[-1]._start.date()
-            == (datetime.today() + timedelta(days=1)).date()
+            == (datetime.today() + timedelta(days=1)).date() or
+            channel._programmes[-1]._start.date()
+            > (datetime.today() + timedelta(days=1)).date() )
         )
