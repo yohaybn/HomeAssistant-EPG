@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "file_name": "File Name",
+          "full_schedule": "Full Schedule",
+          "generated": "Generated"
+        },
+        "description": "Provide the file name as shown <a href='https://www.open-epg.com/app/index.php' target='_blank'>here</a> and choose whether to track the full schedule. or enter your genrated file code"
+      },
+      "channels": {
+        "data": {
+          "channels": "Select Channels"
+        },
+        "description": "Select the channels you want to track from the list below."
+      }
+    },
+    "error": {
+      "no_channels": "No channels found. Please check the file path."
+    }
+  }
+}
