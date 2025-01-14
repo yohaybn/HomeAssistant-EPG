@@ -35,7 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry, async_add_
     _hass=hass
     async def handle_update_channels(data):
         _LOGGER.debug(f"{data}")
-        data=_hass.data[DOMAIN][data.data.get("file")]
+        data=_hass.data[DOMAIN][data.data.get("entry_id")]
         await update_channels(data,True)
 
     async def update_channels(data,force):
@@ -48,20 +48,19 @@ async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry, async_add_
         if guide is not None:
             if generated:
                 for channel  in guide.channels():
-                    _LOGGER.debug(f"generated file ({name}): add cahnnel {channel.name()}")
+                    _LOGGER.debug(f"generated file ({name}): add cahnnel {channel.name()} with {len(channel.get_programmes())} programmes ")
                     entities.append(ChannelSensor(hass,data, channel.name(), channel))
             else:
                 selected_channels =data.get("selected_channels")
                 for ch in selected_channels:
-                    _LOGGER.debug(f"file ({name}): add cahnnel {ch}")
                     channel=guide.get_channel(ch)
                     entities.append(ChannelSensor(hass,data, channel.name(), channel))
+                    _LOGGER.debug(f"file ({name}): add cahnnel {ch} with {len(channel.get_programmes())} programmes ")
         else:
             _LOGGER.error(f"cannot load {name}")
         if force:
             registry = get_entity_registry(hass)
             for entity in entities:
-                #entity._force_update()
                 registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == entity.unique_id )))
 
         async_add_entities(entities, True)
@@ -129,7 +128,7 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
                 await hass.async_add_executor_job(write_file, file,data)
                 guide = Guide(data,time_zone)
             else:
-                _LOGGER.error(data)
+                _LOGGER.error("Cannoat retrive date. data is: %s",data )
                 raise PlatformNotReady("Connection to the service failed.\n %s",data )
         else:
             _LOGGER.error("Unable to retrieve guide from %s", url)

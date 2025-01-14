@@ -45,7 +45,7 @@ class Channel:
         for programme in self._programmes:
             ret[
                 programme.title
-            ] = f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour }\n\tend: {programme.stop_hour }"
+            ] = f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour }\n\tend: {programme.end_hour }"
         return ret
 
     def get_programmes_by_start(self) -> dict[str, str]:

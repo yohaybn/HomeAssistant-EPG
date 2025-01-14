@@ -1,18 +1,18 @@
-# Describes the format for available aftership services
-
 handle_update_channels:
   name: update_channels
-  description: update_channels.
+  description: Force update Guide file
   fields:
-    file:
+    entry_id:
       name: config_entry
-      description: the name of file that contains the channel
+      description: The ID of the config_entry to update
       required: true
-
       selector:
         config_entry:
-          filter:
-            integration: "epg"
+          integration: "epg"
+
+
+
+
 
 
 

@@ -3,21 +3,21 @@
     "step": {
       "user": {
         "data": {
-          "file_name": "File Name",
-          "full_schedule": "Full Schedule",
-          "generated": "Generated"
+          "file_name": "File Name (Or Generated File Code)",
+          "full_schedule": "Track Full Schedule (2 Days)",
+          "generated": "Generated File Code"
         },
-        "description": "Provide the file name as shown <a href='https://www.open-epg.com/app/index.php' target='_blank'>here</a> and choose whether to track the full schedule. or enter your genrated file code"
+        "description": "Enter the file name as displayed on the [Open EPG website](https://www.open-epg.com/app/index.php). Or specify a generated file code if applicable."
       },
       "channels": {
         "data": {
           "channels": "Select Channels"
         },
-        "description": "Select the channels you want to track from the list below."
+        "description": "Choose the channels you want to track from the available list below."
       }
     },
     "error": {
-      "no_channels": "No channels found. Please check the file path."
+      "no_channels": "No channels were found. Please verify the file name or generated code and try again."
     }
   }
 }
