@@ -47,17 +47,18 @@ The integration now uses Home Assistant's UI configuration flow, making it easie
 2.  Click **Add Integration** and search for "EPG".
     
 3.  Follow the prompts:
-   ![Config flow](/images/config_flow.png)
     
     -   **File Name**: Enter the file name or generated file code from open-epg.com.
         
     -   **Track Full Schedule**: Enable this option if you want to track the full schedule (2 days). Note that enabling this may increase database size significantly.
         
     -   **Generated File Code**: Specify if you're using a custom file.
+  
+        ![Config flow](/images/config_flow.png)
         
-5.  Select the channels you want to track from the dynamically fetched list.
+4.  Select the channels you want to track from the dynamically fetched list.
     
-6.  Complete the setup to create sensors for the selected channels.
+5.  Complete the setup to create sensors for the selected channels.
 
 ### Custom files
 open-epg.com allows the creation of custom EPG files with selected channels. To create a custom file:
