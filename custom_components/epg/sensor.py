@@ -3,119 +3,79 @@ from __future__ import annotations
 import logging
 
 from typing import Final
-import json
 import os
 from .guide_classes import Guide
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.exceptions import PlatformNotReady
+from homeassistant.config_entries import ConfigEntry
+
 from homeassistant.components.sensor import (
-    PLATFORM_SCHEMA as BASE_PLATFORM_SCHEMA,
         SensorEntity,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
 )
-from homeassistant.helpers.entity_registry import async_get as get_entity_registry
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 import aiohttp
-import pytz 
+import pytz
 
+from homeassistant.helpers.entity_registry import async_get as get_entity_registry
 from .const import (
     DOMAIN,
     ICON,
     UPDATE_TOPIC,
 )
 
-
+# Default scan interval
 _LOGGER: Final = logging.getLogger(__name__)
 
-_JSON_FILE = os.path.join(os.path.dirname(__file__), "userfiles/channels.json")
-
-
-
-_config={}
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry, async_add_entities):
     """Set up the EPG sensor platform."""
+    _config=config.data
+    _hass=hass
+    async def handle_update_channels(data):
+        _LOGGER.debug(f"{data}")
+        data=_hass.data[DOMAIN][data.data.get("entry_id")]
+        await update_channels(data,True)
 
-    _config=config
-    guides={}
-    def read_json():
-
-        with open(_JSON_FILE) as f:
-          data = json.load(f)
-        return data
-
-
-    def write_json(data):
-        _LOGGER.debug("write_packages_json")
-        json_object = json.dumps(data, indent=4)
-        with open(_JSON_FILE, "w") as outfile:
-            outfile.write(json_object)
-
-
-    async def track_channel(data):
-        """track_channel"""
-        _LOGGER.debug("track_channel")
-        channel_id=data.data.get("channel_id")
-        file=data.data.get("file")
-        channel=guides.get(file).get_channel(channel_id)
-        async_add_entities([ChannelSensor(hass,_config,  channel.name(), channel)], True)
-        json = await hass.async_add_executor_job(read_json)
-        json[channel_id] = file
-        await hass.async_add_executor_job(write_json,json)
-
-
-    async def remove_channel(in_data):
-        _LOGGER.debug("remove_channel")
-        channel_id=in_data.data.get("channel_id")
-        registry = get_entity_registry(hass)
-        registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == channel_id )))
-        data = await hass.async_add_executor_job(read_json)
-        del data[channel_id]
-        await hass.async_add_executor_job(write_json,json)
-
-
-    entities = []
-    for row in _config.get("files"):
-        guide = await get_guide(hass, _config, row)
-        file= row.get("file")
-        generated= row.get("generated") or False
-        name= row.get("name") or file
-        guides[file]=guide
-        
-        if generated:
-            if guide is not None:
+    async def update_channels(data,force):
+        _LOGGER.debug("update_channels_start")
+        _LOGGER.debug(f"data: {data}")
+        entities = []
+        guide = await get_guide(hass, data,force)
+        generated= data.get("generated") or False
+        name= data.get("file_name")
+        if guide is not None:
+            if generated:
                 for channel  in guide.channels():
-                    entities.append(ChannelSensor(hass,_config, channel.name(), channel))
-        else:
-            json_data =await hass.async_add_executor_job(read_json)
-            for ch in json_data:
-                if file == json_data.get(ch):
+                    _LOGGER.debug(f"generated file ({name}): add cahnnel {channel.name()} with {len(channel.get_programmes())} programmes ")
+                    entities.append(ChannelSensor(hass,data, channel.name(), channel))
+            else:
+                selected_channels =data.get("selected_channels")
+                for ch in selected_channels:
                     channel=guide.get_channel(ch)
-                    entities.append(ChannelSensor(hass,_config, channel.name(), channel))
-        entities.append(EPGSensor(hass,_config, name, guide))
-    async_add_entities(entities, True)
+                    entities.append(ChannelSensor(hass,data, channel.name(), channel))
+                    _LOGGER.debug(f"file ({name}): add cahnnel {ch} with {len(channel.get_programmes())} programmes ")
+        else:
+            _LOGGER.error(f"cannot load {name}")
+        if force:
+            registry = get_entity_registry(hass)
+            for entity in entities:
+                registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == entity.unique_id )))
+
+        async_add_entities(entities, True)
+        _LOGGER.debug("update_channels_end")
 
 
 
 
-
+    await update_channels(_config,False)
     hass.services.async_register(
         DOMAIN,
-        "track_channel",
-        track_channel,
+        "handle_update_channels",
+        handle_update_channels,
     )
-    hass.services.async_register(
-        DOMAIN,
-        "remove_channel",
-        remove_channel,
-    )
+
 def read_file(file):
     with open(file, "r") as guide_file:
         content = guide_file.readlines()
@@ -125,28 +85,33 @@ def write_file(file,data):
     with open(file, "w") as file:
         file.write(data)
         file.close()
-async def get_guide(hass, _config, row):
 
-    _LOGGER.debug(row.get("generated"))
-    _LOGGER.debug(row.get("file"))
-    file= row.get("file")
-    if row.get("generated"):
-        _GUIDE_URL = f"https://www.open-epg.com/generate/{file}.xml"
+
+
+async def get_guide(hass: HomeAssistant, _config,force):
+    file= ''.join(_config.get("file_name").split()).lower()
+    if _config.get("generated"):
+        guide_url = f"https://www.open-epg.com/generate/{file}.xml"
     else:
-        _GUIDE_URL = f"https://www.open-epg.com/files/{file}.xml"
-    _GUIDE_FILE = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
-    if os.path.isfile(_GUIDE_FILE):
-        content= await hass.async_add_executor_job(read_file, _GUIDE_FILE)
+        guide_url = f"https://www.open-epg.com/files/{file}.xml"
+    guide_file = _config.get("file_path")
+
+    if os.path.isfile(guide_file) and not force:
+        _LOGGER.debug(f"Loading guide from existing file ({file})")
+        content= await hass.async_add_executor_job(read_file, guide_file)
         time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
         guide = Guide(content,time_zone)
     else:
-        _LOGGER.debug("fetching the guide first time")
-        os.makedirs(os.path.dirname(_GUIDE_FILE), exist_ok=True)
-        guide = await fetch_guide(hass,_GUIDE_URL,_GUIDE_FILE)
+        if force:
+            _LOGGER.debug(f"fetching the guide by force ({file})")
+        else:
+            _LOGGER.debug(f"fetching the guide first time ({file})")
+        os.makedirs(os.path.dirname(guide_file), exist_ok=True)
+        guide = await fetch_guide(hass,guide_url,guide_file)
 
     if guide is not None and guide.is_need_to_update():
-        _LOGGER.debug("updating the guide")
-        guide = await fetch_guide(hass,_GUIDE_URL,_GUIDE_FILE)
+        _LOGGER.debug(f"updating the guide ({file})")
+        guide = await fetch_guide(hass,guide_url,guide_file)
     return guide
 
 async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
@@ -163,12 +128,16 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
                 await hass.async_add_executor_job(write_file, file,data)
                 guide = Guide(data,time_zone)
             else:
-                _LOGGER.error(data)
+                _LOGGER.error("Cannoat retrive date. data is: %s",data )
+                raise PlatformNotReady("Connection to the service failed.\n %s",data )
         else:
             _LOGGER.error("Unable to retrieve guide from %s", url)
+            raise PlatformNotReady("Connection to the service failed.")
 
     except aiohttp.ClientError as error:
         _LOGGER.error("Error while retrieving guide: %s", error)
+        raise PlatformNotReady("Connection to the service failed.: %s", error)
+
     return guide
 
 
@@ -177,7 +146,6 @@ class ChannelSensor(SensorEntity):
     _attr_icon: str = ICON
     def __init__(self, hass,config, name, data) -> None:
         """Initialize the sensor."""
-        _LOGGER.debug("ChannelSensor __init__ start")
         self._data = data
         self._attributes: {}
         self._state: data.get_current_title()
@@ -207,57 +175,14 @@ class ChannelSensor(SensorEntity):
         return ret
 
     async def async_added_to_hass(self) -> None:
-        """Register callbacks."""
+        """Handle when the entity is added to Home Assistant."""
+
         self.async_on_remove(
             async_dispatcher_connect(self.hass, UPDATE_TOPIC, self._force_update)
         )
 
     async def _force_update(self) -> None:
         """Force update of data."""
+        _LOGGER.debug("_force_update")
         self.async_write_ha_state()
 
-
-class EPGSensor(SensorEntity):
-    """Representation of a EPGSensor ."""
-    _attr_icon: str = ICON
-    def __init__(self, hass,config, name, data) -> None:
-        """Initialize the sensor."""
-        _LOGGER.debug("EPGSensor __init__ start")
-        self._data = data
-        self._attributes: {}
-        self._state: len(data.channels())
-        self._attr_name = f"{DOMAIN}_{name}"
-        self._hass = hass
-        self._config=config
-
-    @property
-    def unique_id(self) -> str | None:
-        return self.name
-
-    @property
-    def state(self):
-        if self._data is not None:
-            if self._data.channels():
-                return len(self._data.channels())
-        return 0
-
-    @property
-    def extra_state_attributes(self) -> dict[str, str]:
-        channels={}
-        if self._data is not None:
-          if self._data.channels():
-              for ch in self._data.channels():
-                  channel = {"name":ch.name(),"id":ch.id}
-                  channels[ch.id]= channel
-        attributes={"channels":channels}
-        return attributes
-
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks."""
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, UPDATE_TOPIC, self._force_update)
-        )
-
-    async def _force_update(self) -> None:
-        """Force update of data."""
-        self.async_write_ha_state()

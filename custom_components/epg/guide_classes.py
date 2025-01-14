@@ -2,7 +2,7 @@ from datetime import datetime, date, timedelta
 from bs4 import BeautifulSoup
 import time
 import logging
-import pytz 
+import pytz
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 class Programme:
     def __init__(self, start, stop, title, desc,time_zone) -> None:
         """Initialize the sensor."""
-        
+
         #_LOGGER.debug(f"timezone: {time_zone}")
         self._start = datetime.strptime(start, "%Y%m%d%H%M%S %z")
         self._stop = datetime.strptime(stop, "%Y%m%d%H%M%S %z")
@@ -29,8 +29,8 @@ class Channel:
         self.id = id
         self._lang = lang
         self._time_zone=time_zone
-        
-        
+
+
 
     def name(self) -> str:
         return self._name
@@ -45,7 +45,7 @@ class Channel:
         for programme in self._programmes:
             ret[
                 programme.title
-            ] = f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour }\n\tend: {programme.stop_hour }"
+            ] = f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour }\n\tend: {programme.end_hour }"
         return ret
 
     def get_programmes_by_start(self) -> dict[str, str]:
@@ -161,7 +161,7 @@ class Guide:
         channel = self._channels[0]
         return not ( channel._programmes and(
             channel._programmes[-1]._start.date()
-            == (datetime.today() + timedelta(days=1)).date() or
+            == (datetime.today() + timedelta(days=1)).date() or #handle timezone issues
             channel._programmes[-1]._start.date()
             > (datetime.today() + timedelta(days=1)).date() )
         )

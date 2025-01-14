@@ -38,34 +38,27 @@ The integration now uses open-epg.com as its EPG data source. This change was im
 
 ## Configuration
 
-To configure EPG sensors for channels, add the following example entry to your `configuration.yaml` file:
+### Using the Config Flow
 
-    # Example configuration.yaml entry
-    ...
-    sensor:
-      - platform: epg
-        full_schedule: true
-        files:
-            - file: israelpremium
-              name: all_israel
-            - file: 122DjgdtAA
-              generated: true
-              name: channels
-    ...
+The integration now uses Home Assistant's UI configuration flow, making it easier to set up and manage. Follow these steps to configure:
 
-| Name | Type | Default |  Description |
-| --- | --- | --- | --- | 
-| `full_schedule` | bool | false |  Adds the full schedule (2 days) to attributes. May cause database issues with larger data (exceed maximum size of 16384 bytes) in Home Assistant. |
-| `files` | file object array| **required** | Array of file objects. Each file object specifies an EPG file source (details below). |
-
-| Name | Type | Default |  Description |
-| --- | --- | --- | --- | 
-| `file` | string | **required** | Name of the EPG file to use (e.g., argentinapremium2). File names can be found [here](https://www.open-epg.com/app/index.php). |
-| `name` | string | file name |  Name of the sensor for the file. A prefix of epg_ will be added (e.g., epg_all_israel).|
-| `generated` | bool | false | Set to true if using custom files from open-epg.com. This will create a separate sensor for each channel in the file. See "Custom Files" for details. |
-
-
-this will create sensor for each file contains the list of channels that can be tracked using service `track_channel`.
+1.  Go to **Settings > Devices & Services** in Home Assistant.
+    
+2.  Click **Add Integration** and search for "EPG".
+    
+3.  Follow the prompts:
+    
+    -   **File Name**: Enter the file name or generated file code from open-epg.com.
+        
+    -   **Track Full Schedule**: Enable this option if you want to track the full schedule (2 days). Note that enabling this may increase database size significantly.
+        
+    -   **Generated File Code**: Specify if you're using a custom file.
+  
+        ![Config flow](/images/config_flow.png)
+        
+4.  Select the channels you want to track from the dynamically fetched list.
+    
+5.  Complete the setup to create sensors for the selected channels.
 
 ### Custom files
 open-epg.com allows the creation of custom EPG files with selected channels. To create a custom file:
@@ -77,22 +70,12 @@ open-epg.com allows the creation of custom EPG files with selected channels. To 
 ## Services
 
 The following services are implemented by the component:
-- `track_channel` - add sensor for choosen channel
+- `update_channels` - Force update Guide file
     ```
-    service: epg.track_channel
+    service: epg.handle_update_channels
     data:
-        file: chinapremium2
-        channel_id: AnhuiTV.cn
+      entry_id: a9dcc3edcdd1e421c62ea735a9747cd6
     ```
-- `remove_channel` - delete sensor for choosen channel
-  ```
-     service: epg.remove_channel
-    data:
-        channel_id: AnhuiTV.cn
-  ```
-
-
-
 
 
 ## Displaying Television Programming in Lovelace
@@ -116,3 +99,34 @@ title: today
 ## Troubleshooting
 - **Full Schedule Error**: If using full_schedule: true, you may encounter size limit issues in Home Assistant’s database. If so, set full_schedule: false.
 - **Missing Channels**: Ensure you’re using the correct file ID, especially for custom files.
+
+
+## Reporting Issues
+
+If you encounter any problems or need assistance, you can open an issue on the [GitHub repository](https://github.com/yohaybn/HomeAssistant-EPG/issues). To help us debug the issue, please enable debug logging for the integration and provide relevant logs:
+
+### Enabling Debug Logging
+
+1.  Enable debug in the UI or add the following to your `configuration.yaml` file:
+    
+    ```
+    logger:
+      default: warning
+      logs:
+        custom_components.epg: debug
+    ```
+    
+2.  Restart Home Assistant to apply the changes.
+    
+3.  Reproduce the issue and check the logs in **Settings > System > Logs** or the `home-assistant.log` file in your configuration directory.
+    
+
+### Providing Logs
+
+When opening an issue, include:
+
+-   A detailed description of the problem.
+    
+-   Steps to reproduce the issue.
+    
+-   Relevant logs from Home Assistant with debug mode enabled for the integration.
