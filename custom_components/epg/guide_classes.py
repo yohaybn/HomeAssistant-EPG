@@ -140,6 +140,8 @@ class Guide:
                 title = next(children).text
                 try:
                     desc = next(children).text
+                    if not desc: #for generated files that contains <Sub-title> tag
+                        desc = next(children).text
                 except:
                     desc=""
                 _prog = Programme(prog["start"], prog["stop"], title, desc,time_zone)
