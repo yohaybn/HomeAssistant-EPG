@@ -89,10 +89,11 @@ def write_file(file,data):
 
 
 async def get_guide(hass: HomeAssistant, _config,force):
-    file= ''.join(_config.get("file_name").split()).lower()
+    file= _config.get("file_name")
     if _config.get("generated"):
         guide_url = f"https://www.open-epg.com/generate/{file}.xml"
     else:
+        file=''.join(file.split()).lower()
         guide_url = f"https://www.open-epg.com/files/{file}.xml"
     guide_file = _config.get("file_path")
 
