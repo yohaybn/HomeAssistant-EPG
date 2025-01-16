@@ -150,7 +150,7 @@ class ChannelSensor(SensorEntity):
         self._data = data
         self._attributes: {}
         self._state: data.get_current_title()
-        self._attr_name = f"{DOMAIN}_{name}"
+        self._attr_name = f"{name[:-3]}"
         self._hass = hass
         self._config=config
 
