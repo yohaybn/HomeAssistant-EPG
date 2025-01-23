@@ -73,14 +73,19 @@ class Channel:
         ret["today"] = {}
 
         now = self._time_zone.localize(datetime.now())
+        utc_offset=now.utcoffset().total_seconds()/60/60
         for programme in self._programmes:
+            # add timezone offset to fix issue with start date is wrong day
+            _start_date=(programme._start+ timedelta(hours=utc_offset)).date() 
             if (
                 programme._start >= now
-                and programme._start.date() == datetime.today().date()
+                and _start_date == datetime.today().date()
             ):
                 obj = {}
                 obj["title"] = programme.title
                 obj["desc"] = programme.desc
+                obj["start"] = programme.start_hour
+                obj["end"] = programme.end_hour
                 ret["today"][programme.start_hour] = obj
         return ret
 
@@ -89,17 +94,24 @@ class Channel:
         ret["today"] = {}
         ret["tomorrow"] = {}
         now = self._time_zone.localize(datetime.now())
+        
+        utc_offset=now.utcoffset().total_seconds()/60/60
         for programme in self._programmes:
             if programme._start >= now:
-                if programme._start.date() == datetime.today().date():
+                _start_date=(programme._start+ timedelta(hours=utc_offset)).date() # add timezone offset to fix issue with time zone for
+                if _start_date == datetime.today().date():
                     obj = {}
                     obj["title"] = programme.title
                     obj["desc"] = programme.desc
+                    obj["start"] = programme.start_hour
+                    obj["end"] = programme.end_hour
                     ret["today"][programme.start_hour] = obj
                 else:
                     obj = {}
                     obj["title"] = programme.title
                     obj["desc"] = programme.desc
+                    obj["start"] = programme.start_hour
+                    obj["end"] = programme.end_hour
                     ret["tomorrow"][programme.start_hour] = obj
 
         return ret
@@ -140,7 +152,7 @@ class Guide:
                 title = next(children).text
                 try:
                     desc = next(children).text
-                    if not desc: #for generated files that contains <Sub-title> tag
+                    if not desc: #for generated files that contains <Sub-title>
                         desc = next(children).text
                 except:
                     desc=""
