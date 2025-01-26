@@ -92,30 +92,32 @@ async def get_guide(hass: HomeAssistant, _config,force):
     file= _config.get("file_name")
     if _config.get("generated"):
         guide_url = f"https://www.open-epg.com/generate/{file}.xml"
+        selected_channels="ALL"
     else:
         file=''.join(file.split()).lower()
         guide_url = f"https://www.open-epg.com/files/{file}.xml"
+        selected_channels=_config.get("selected_channels")
     guide_file = _config.get("file_path")
 
     if os.path.isfile(guide_file) and not force:
         _LOGGER.debug(f"Loading guide from existing file ({file})")
         content= await hass.async_add_executor_job(read_file, guide_file)
         time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
-        guide = Guide(content,time_zone)
+        guide = Guide(content,selected_channels,time_zone)
     else:
         if force:
             _LOGGER.debug(f"fetching the guide by force ({file})")
         else:
             _LOGGER.debug(f"fetching the guide first time ({file})")
         os.makedirs(os.path.dirname(guide_file), exist_ok=True)
-        guide = await fetch_guide(hass,guide_url,guide_file)
+        guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
 
     if guide is not None and guide.is_need_to_update():
         _LOGGER.debug(f"updating the guide ({file})")
-        guide = await fetch_guide(hass,guide_url,guide_file)
+        guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
     return guide
 
-async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
+async def fetch_guide(hass: HomeAssistant,url,file,selected_channels) -> Guide:
     session = async_get_clientsession(hass)
     _LOGGER.debug("timezone: "+hass.config.time_zone)
     time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
@@ -127,7 +129,7 @@ async def fetch_guide(hass: HomeAssistant,url,file) -> Guide:
         if data is not None:
             if "channel" in data:
                 await hass.async_add_executor_job(write_file, file,data)
-                guide = Guide(data,time_zone)
+                guide = Guide(data,selected_channels,time_zone)
             else:
                 _LOGGER.error("Cannoat retrive date. data is: %s",data )
                 raise PlatformNotReady("Connection to the service failed.\n %s",data )
