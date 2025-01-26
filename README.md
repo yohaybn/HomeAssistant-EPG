@@ -130,3 +130,12 @@ When opening an issue, include:
 -   Steps to reproduce the issue.
     
 -   Relevant logs from Home Assistant with debug mode enabled for the integration.
+
+
+### Donate
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/yohaybn)
+
+If you find it helpful or interesting, consider supporting me by buying me a coffee or starring the project on GitHub! ☕⭐
+Your support helps me improve and maintain this project while keeping me motivated. Thank you! ❤️
+
+
