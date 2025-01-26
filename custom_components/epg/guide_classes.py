@@ -76,7 +76,7 @@ class Channel:
         utc_offset=now.utcoffset().total_seconds()/60/60
         for programme in self._programmes:
             # add timezone offset to fix issue with start date is wrong day
-            _start_date=(programme._start+ timedelta(hours=utc_offset)).date() 
+            _start_date=(programme._start+ timedelta(hours=utc_offset)).date()
             if (
                 programme._start >= now
                 and _start_date == datetime.today().date()
@@ -94,7 +94,7 @@ class Channel:
         ret["today"] = {}
         ret["tomorrow"] = {}
         now = self._time_zone.localize(datetime.now())
-        
+
         utc_offset=now.utcoffset().total_seconds()/60/60
         for programme in self._programmes:
             if programme._start >= now:
@@ -138,7 +138,7 @@ class Channel:
         return p.desc
 class Guide:
     TIMEZONE=None
-    def __init__(self, text,time_zone) -> None:
+    def __init__(self, text,selected_channels,time_zone) -> None:
         """Initialize the class"""
         self._channels = []
         self.TIMEZONE=time_zone
@@ -146,19 +146,20 @@ class Guide:
 
         for channel in soup.find_all("channel"):
             display_name = next(channel.children)
-            _channel = Channel(channel["id"], display_name.text, display_name.get("lang"),time_zone)
-            for prog in soup.find_all("programme", {"channel": channel["id"]}):
-                children = prog.children
-                title = next(children).text
-                try:
-                    desc = next(children).text
-                    if not desc: #for generated files that contains <Sub-title>
+            if(selected_channels =="ALL" or display_name.text in selected_channels):
+                _channel = Channel(channel["id"], display_name.text, display_name.get("lang"),time_zone)
+                for prog in soup.find_all("programme", {"channel": channel["id"]}):
+                    children = prog.children
+                    title = next(children).text
+                    try:
                         desc = next(children).text
-                except:
-                    desc=""
-                _prog = Programme(prog["start"], prog["stop"], title, desc,time_zone)
-                _channel.add_programme(_prog)
-            self.add_cahnnel(_channel)
+                        if not desc: #for generated files that contains <Sub-title>
+                            desc = next(children).text
+                    except:
+                        desc=""
+                    _prog = Programme(prog["start"], prog["stop"], title, desc,time_zone)
+                    _channel.add_programme(_prog)
+                self.add_cahnnel(_channel)
 
     def add_cahnnel(self, channel) -> None:
         """Initialize the sensor."""
