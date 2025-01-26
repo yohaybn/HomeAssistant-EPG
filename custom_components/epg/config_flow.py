@@ -83,8 +83,8 @@ class EPGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=self.user_data,
             )
 
-        channel_options = {channel.split(";")[0] for channel in self.available_channels if channel.strip() and not channel.startswith("In total this list")}
-
+        channel_options = list({channel.split(";")[0] for channel in self.available_channels if channel.strip() and not channel.startswith("In total this list")})
+        channel_options.sort()
         data_schema = vol.Schema(
             {
                 vol.Required("channels", default=[]): cv.multi_select(channel_options)
@@ -97,51 +97,7 @@ class EPGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def get_guide(self, hass: HomeAssistant, file, generated) -> Guide:
-        """Retrieve or generate the guide based on file and configuration."""
-        url = (
-            f"https://www.open-epg.com/generate/{file}.xml"
-            if generated
-            else f"https://www.open-epg.com/files/{file}.xml"
-        )
-        local_file = os.path.join(os.path.dirname(__file__), f"userfiles/{file}.xml")
-
-        if os.path.isfile(local_file):
-            content = await hass.async_add_executor_job(read_file, local_file)
-            time_zone = await hass.async_add_executor_job(pytz.timezone, hass.config.time_zone)
-            guide = Guide(content, time_zone)
-        else:
-            _LOGGER.debug("Fetching guide for the first time")
-            os.makedirs(os.path.dirname(local_file), exist_ok=True)
-            guide = await self.fetch_guide(hass, url, local_file)
-
-        if guide and guide.is_need_to_update():
-            _LOGGER.debug("Updating the guide")
-            guide = await self.fetch_guide(hass, url, local_file)
-
-        return guide
-
-    async def fetch_guide(self, hass: HomeAssistant, url, file) -> Guide:
-        """Fetch the guide from the URL and save it locally."""
-        session = async_get_clientsession(hass)
-        time_zone = await hass.async_add_executor_job(pytz.timezone, hass.config.time_zone)
-
-        try:
-            response = await session.get(url)
-            response.raise_for_status()
-            data = await response.text()
-
-            if data and "channel" in data:
-                await hass.async_add_executor_job(write_file, file, data)
-                return Guide(data, time_zone)
-            else:
-                _LOGGER.error("Invalid guide content: %s", data)
-                raise PlatformNotReady("Invalid guide content.")
-
-        except aiohttp.ClientError as error:
-            _LOGGER.error("Error fetching guide: %s", error)
-            raise PlatformNotReady(f"Connection error: {error}")
-
+    
     async def fetch_channel_list(self, hass: HomeAssistant, url):
         """Fetch the channel_list from the URL"""
         session = async_get_clientsession(hass)
@@ -157,9 +113,5 @@ class EPGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _fetch_channels(self, user_data):
         """Fetch the list of channels from the guide."""
         file = ''.join(user_data["file_name"].split()).lower()
-        if user_data["generated"]:
-            guide = await self.get_guide(self.hass, file, user_data["generated"])
-            return guide.channels()
-        else:
-            channels= await self.fetch_channel_list(self.hass, f"https://www.open-epg.com/files/{file}.xml.txt")
-            return channels.splitlines()
+        channels= await self.fetch_channel_list(self.hass, f"https://www.open-epg.com/files/{file}.xml.txt")
+        return channels.splitlines()
