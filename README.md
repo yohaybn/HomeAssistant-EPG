@@ -79,8 +79,9 @@ The following services are implemented by the component:
 
 
 ## Displaying Television Programming in Lovelace
+Recommended: For a more visually appealing and feature-rich display of your EPG data, it's highly recommended to use the [Lovelace EPG Card](https://github.com/yohaybn/lovelace-epg-card).  This custom card is specifically designed to work seamlessly with the HomeAssistant-EPG integration and provides a dynamic timeline view of your TV programming.
 
-Use the following example to display today’s programming on a Lovelace card:
+Alternative (Basic Markdown Example):  If you prefer a simpler approach, you can use the following example to display today’s programming on a Lovelace card using Markdown:
 
 ```
 type: markdown
