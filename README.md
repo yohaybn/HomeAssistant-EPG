@@ -20,7 +20,7 @@ The integration now uses open-epg.com as its EPG data source. This change was im
 
 ### Installation via HACS (Recommended)
 1. Open HACS in your Home Assistant dashboard.
-2. Until this repository is part of HACS by default, you need to add it as a custom repository.
+2. Until this repository is part of HACS by default, you need to add it as a custom repository. (working on it)
 3. Go to *Integrations* > *Add custom repository* and enter:  ``` https://github.com/yohaybn/HomeAssistant-EPG ```
 
 
