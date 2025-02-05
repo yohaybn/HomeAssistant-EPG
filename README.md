@@ -1,4 +1,5 @@
 # HomeAssistant-EPG
+![icon](/images/icon@2x.png)
 
 Home Assistant integration for EPG (Electronic Program Guide) sensors, using the [open-epg.com EPG guide](https://www.open-epg.com/app/index.php). This integration provides real-time program guide data as sensors within Home Assistant, allowing you to display current and upcoming TV programming.
 
