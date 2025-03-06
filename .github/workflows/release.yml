@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  push:
   release:
     types: [published]
 
@@ -26,7 +27,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./custom_components/epg/epg.zip
+          file: ./custom_components/epg/hacs.json
           asset_name: epg.zip
           tag: ${{ github.ref }}
           overwrite: true
