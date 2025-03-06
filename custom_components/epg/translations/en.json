@@ -15,9 +15,6 @@
         },
         "description": "Choose the channels you want to track from the available list below."
       }
-    },
-    "errors": {
-      "no_channels": "No channels were found. Please verify the file name or generated code and try again."
     }
   },
   "options": {
@@ -36,9 +33,6 @@
         },
         "description": "Choose the channels you want to track from the available list below."
       }
-    },
-    "errors": {
-      "no_channels": "No channels were found. Please verify the file name or generated code and try again."
     }
   }
 }
