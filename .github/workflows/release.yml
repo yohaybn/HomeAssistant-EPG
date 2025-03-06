@@ -23,6 +23,10 @@ jobs:
         run: |
           cd custom_components/epg
           zip epg.zip -r ./
+      - name: Test
+        run: pwd
+      - name: Test2
+        run: cat epg.zip
       - name: Upload zip to release
         uses: svenstaro/upload-release-action@v2
         with:
