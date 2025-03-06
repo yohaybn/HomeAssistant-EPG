@@ -25,8 +25,8 @@ jobs:
           zip epg.zip -r ./
       - name: Test
         run: pwd
-      - name: ls -lR
-        run: cat epg.zip
+      - name: test2
+        run: ls -lR
       - name: Upload zip to release
         uses: svenstaro/upload-release-action@v2
         with:
