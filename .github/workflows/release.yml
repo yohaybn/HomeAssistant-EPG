@@ -5,6 +5,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write     # Allows write access to repository contents, which includes uploading assets
+
 jobs:
   release_zip_file:
     name: Prepare release asset
@@ -31,7 +34,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./custom_components/epg/hacs.json
+          file: ./custom_components/epg/epg.zip
           asset_name: epg.zip
           tag: ${{ github.ref }}
           overwrite: true
