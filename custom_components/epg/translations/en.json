@@ -16,7 +16,28 @@
         "description": "Choose the channels you want to track from the available list below."
       }
     },
-    "error": {
+    "errors": {
+      "no_channels": "No channels were found. Please verify the file name or generated code and try again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "file_name": "File Name (Or Generated File Code)",
+          "full_schedule": "Track Full Schedule (2 Days)",
+          "generated": "Generated File Code"
+        },
+        "description": "Enter the file name as displayed on the [Open EPG website](https://www.open-epg.com/app/index.php). Or specify a generated file code if applicable."
+      },
+      "channels": {
+        "data": {
+          "channels": "Select Channels"
+        },
+        "description": "Choose the channels you want to track from the available list below."
+      }
+    },
+    "errors": {
       "no_channels": "No channels were found. Please verify the file name or generated code and try again."
     }
   }
