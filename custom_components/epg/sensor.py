@@ -31,7 +31,7 @@ _LOGGER: Final = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry, async_add_entities):
     """Set up the EPG sensor platform."""
-    _config=config.data
+    _config=config.options
     _hass=hass
     async def handle_update_channels(data):
         _LOGGER.debug(f"{data}")
