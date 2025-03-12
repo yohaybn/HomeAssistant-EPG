@@ -40,13 +40,13 @@ async def fetch_channel_list( hass: HomeAssistant, url):
            return data
        except aiohttp.ClientError as error:
            _LOGGER.error("Error fetching guide: %s", error)
-           raise PlatformNotReady(f"Connection error: {error}")
 
 async def _fetch_channels(hass: HomeAssistant,  user_data):
     """Fetch the list of channels from the guide."""
     file = ''.join(user_data["file_name"].split()).lower()
     channels= await fetch_channel_list(hass, f"https://www.open-epg.com/files/{file}.xml.txt")
-    return channels.splitlines()
+
+    return channels.splitlines() if channels else None
 
 
 
@@ -64,6 +64,15 @@ class EPGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
+            if not user_input.get("generated"):
+                self.available_channels = await _fetch_channels(self.hass, user_input)
+                if not self.available_channels:
+                    errors["base"] = "invalid_file_name"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=first_step_schema,
+                        errors=errors,
+                    )
             self.user_data.update(user_input)
             return await self.async_step_channels()
 
@@ -85,15 +94,6 @@ class EPGConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=self.user_data,
                 options=self.user_data,
             )
-        if not self.available_channels:
-            self.available_channels = await _fetch_channels(self.hass, self.user_data)
-            if not self.available_channels:
-                errors["base"] = "no_channels"
-                return self.async_show_form(
-                    step_id="channels",
-                    data_schema=vol.Schema({}),
-                    errors=errors,
-                )
 
         if user_input is not None:
             self.user_data["selected_channels"] = user_input["channels"]
@@ -133,7 +133,8 @@ class EPGOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self.defult_data=config_entry.options
+
         self.user_data = {}  # Temporary storage for data across steps
         self.available_channels = []  # Dynamically populated channel list
 
@@ -144,12 +145,11 @@ class EPGOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             self.user_data.update(user_input)
             return await self.async_step_channels()
-        # Retrieve existing options
-        defult_data=self.config_entry.options
+
         options_schema = vol.Schema({
-            vol.Required("file_name",default=defult_data.get("file_name")): str,
-            vol.Required("full_schedule", default=defult_data.get("full_schedule")): bool,
-            vol.Required("generated", default=defult_data.get("generated")): bool,
+            vol.Required("file_name",default=self.defult_data.get("file_name")): vol.Readonly(str),
+            vol.Required("full_schedule", default=self.defult_data.get("full_schedule")): bool,
+            vol.Required("generated", default=self.defult_data.get("generated")): bool,
         })
 
         return self.async_show_form(
@@ -160,8 +160,8 @@ class EPGOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_channels(self, user_input=None):
         """Manage the channel selection step."""
         errors = {}
-        defult_data=self.config_entry.options
-        selected_channels = defult_data.get("selected_channels", [])
+
+        selected_channels = self.defult_data.get("selected_channels", [])
 
         if self.user_data["generated"]:
             file_name = os.path.basename(self.user_data["file_name"])
