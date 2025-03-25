@@ -147,7 +147,7 @@ class EPGOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_channels()
 
         options_schema = vol.Schema({
-            vol.Required("file_name",default=self.defult_data.get("file_name")): vol.Readonly(str),
+            vol.Required("file_name",default=self.defult_data.get("file_name")): str,
             vol.Required("full_schedule", default=self.defult_data.get("full_schedule")): bool,
             vol.Required("generated", default=self.defult_data.get("generated")): bool,
         })
