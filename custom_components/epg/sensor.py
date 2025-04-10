@@ -112,10 +112,27 @@ async def get_guide(hass: HomeAssistant, _config,force):
         os.makedirs(os.path.dirname(guide_file), exist_ok=True)
         guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
 
-    if guide is not None and guide.is_need_to_update():
+    if guide is not None and is_need_to_update(guide_file):
         _LOGGER.debug(f"updating the guide ({file})")
         guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
     return guide
+
+def is_need_to_update(guide_file: str, hours=12) -> bool:
+    """Check if the guide file needs to be updated."""
+    try:
+        mod_timestamp = os.path.getmtime(guide_file)
+        mod_datetime = datetime.datetime.fromtimestamp(mod_timestamp)
+        now_datetime = datetime.datetime.now()
+        time_threshold = datetime.timedelta(hours=hours)
+        time_difference = now_datetime - mod_datetime
+        _LOGGER.debug(f"is_need_to_update return '{time_difference >= time_threshold}'")
+        return time_difference >= time_threshold
+    except FileNotFoundError:
+        _LOGGER.debug(f"Error: File not found at '{guide_file}'")
+        return True
+    except Exception as e:
+        _LOGGER.debug(f"An error occurred checking file '{guide_file}': {e}")
+        return True
 
 async def fetch_guide(hass: HomeAssistant,url,file,selected_channels) -> Guide:
     session = async_get_clientsession(hass)
