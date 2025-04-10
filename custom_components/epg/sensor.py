@@ -1,18 +1,22 @@
 """Support for  HA_EPG."""
+
 from __future__ import annotations
 import logging
 
 from typing import Final
 import os
+import datetime
 from .guide_classes import Guide
+from .result_sensor import EPGBasicSensor
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.components.sensor import (
-        SensorEntity,
+    SensorEntity,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
 )
@@ -25,184 +29,300 @@ from .const import (
     ICON,
     UPDATE_TOPIC,
 )
+from datetime import timedelta
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 # Default scan interval
 _LOGGER: Final = logging.getLogger(__name__)
 
-async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry, async_add_entities):
-    """Set up the EPG sensor platform."""
-    _config=config.options
-    _hass=hass
-    async def handle_update_channels(data):
-        _LOGGER.debug(f"{data}")
-        data=_hass.data[DOMAIN][data.data.get("entry_id")]
-        await update_channels(data,True)
 
-    async def update_channels(data,force):
-        _LOGGER.debug("update_channels_start")
-        _LOGGER.debug(f"data: {data}")
-        entities = []
-        guide = await get_guide(hass, data,force)
-        generated= data.get("generated") or False
-        name= data.get("file_name")
-        if guide is not None:
-            if generated:
-                for channel  in guide.channels():
-                    _LOGGER.debug(f"generated file ({name}): add cahnnel {channel.name()} with {len(channel.get_programmes())} programmes ")
-                    entities.append(ChannelSensor(hass,data, channel.name(), channel))
-            else:
-                selected_channels =data.get("selected_channels")
-                for ch in selected_channels:
-                    channel=guide.get_channel(ch)
-                    entities.append(ChannelSensor(hass,data, channel.name(), channel))
-                    _LOGGER.debug(f"file ({name}): add cahnnel {ch} with {len(channel.get_programmes())} programmes ")
+class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
+    """Class to manage fetching EPG data."""
+
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry, config: dict):
+        """Initialize."""
+        self.config_entry = config_entry
+        self.config_options = config  # Store options from config entry
+        self.hass = hass
+        self._guide: Guide | None = None
+
+        # Define the update interval
+        update_interval = timedelta(hours=24)  # <--- Set your desired interval here
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN} {config_entry.entry_id}",
+            update_interval=update_interval,
+        )
+
+    async def _async_update_data(self) -> Guide | None:
+        """Fetch data from API endpoint.
+
+        This is the place to fetch data.
+        """
+        _LOGGER.debug("Coordinator: Starting data update")
+        file_name = self.config_options.get("file_name")
+        generated = self.config_options.get("generated", False)
+        selected_channels = self.config_options.get("selected_channels", [])
+        file_path = self.config_options.get("file_path")
+
+        if generated:
+            guide_url = f"https://www.open-epg.com/generate/{file_name}.xml"
+            selected_channels_param = "ALL"  # Guide class handles "ALL"
         else:
-            _LOGGER.error(f"cannot load {name}")
-        if force:
-            registry = get_entity_registry(hass)
-            for entity in entities:
-                registry.async_remove(next((x for x in registry.entities if registry.entities.get(x).unique_id == entity.unique_id )))
+            # Ensure filename is clean for URL
+            clean_file_name = "".join(file_name.split()).lower()
+            guide_url = f"https://www.open-epg.com/files/{clean_file_name}.xml"
+            selected_channels_param = selected_channels
 
-        async_add_entities(entities, True)
-        _LOGGER.debug("update_channels_end")
+        session = async_get_clientsession(self.hass)
+        time_zone = await self.hass.async_add_executor_job(
+            pytz.timezone, self.hass.config.time_zone
+        )
+        guide = None
+
+        try:
+            _LOGGER.debug(f"Coordinator: Fetching guide from {guide_url}")
+            response = await session.get(guide_url)
+            response.raise_for_status()
+            data = await response.text()
+
+            if data and "channel" in data:
+                _LOGGER.debug(
+                    f"Coordinator: Successfully fetched guide data for {file_name}"
+                )
+
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                # Write the fetched data to the file asynchronously
+                await self.hass.async_add_executor_job(write_file, file_path, data)
+                # Parse the guide data
+                guide = await self.hass.async_add_executor_job(
+                    Guide, data, selected_channels_param, time_zone
+                )
+                _LOGGER.debug(
+                    f"Coordinator: Guide parsed with {len(guide.channels()) if guide else 0} channels."
+                )
+                self._guide = guide  # Store the latest guide
+                return guide
+            else:
+                _LOGGER.error(
+                    f"Coordinator: No valid 'channel' data received from {guide_url}. Response snippet: {data[:200]}"
+                )
+                return self._guide
+
+        except aiohttp.ClientError as err:
+            _LOGGER.error(f"Coordinator: Error fetching guide from {guide_url}: {err}")
+            return self._guide  # Keep old data on transient error
+        except Exception as err:
+            _LOGGER.exception(
+                f"Coordinator: Unexpected error during update for {file_name}: {err}"
+            )
+            # Raise UpdateFailed for unexpected errors
+            raise UpdateFailed(f"Unexpected error during update: {err}")
 
 
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
+):
+    """Set up the EPG sensor platform."""
 
+    async def handle_update_channels(call):
+        """Handle the service call to manually refresh."""
+        entry_id_to_refresh = call.data.get(
+            "entry_id", config_entry.entry_id
+        )  # Refresh specific or this entry
+        _LOGGER.info(f"Manual refresh requested for entry_id: {entry_id_to_refresh}")
+        coordinator_to_refresh = hass.data[DOMAIN].get(entry_id_to_refresh)
+        if coordinator_to_refresh:
+            await coordinator_to_refresh.async_request_refresh()
+        else:
+            _LOGGER.warning(
+                f"Could not find coordinator for entry_id: {entry_id_to_refresh} to refresh."
+            )
 
-    await update_channels(_config,False)
+    _LOGGER.debug(
+        f"Setting up entry: {config_entry.entry_id} with options: {config_entry.options}"
+    )
+    config_options = config_entry.options
+
+    coordinator = EpgDataUpdateCoordinator(hass, config_entry, config_options)
+    await coordinator.async_config_entry_first_refresh()
+
+    # Store the coordinator instance
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
+
+    # --- Create entities based on initial coordinator data ---
+    entities = []
+    if (
+        coordinator.data
+    ):  # Check if the initial fetch was successful and returned a Guide
+        guide: Guide = coordinator.data  # Type hint for clarity
+        _LOGGER.debug(f"Found {len(guide.channels())} channels in initial guide data.")
+
+        file_name = config_options.get("file_name")
+        generated = config_options.get("generated", False)
+
+        if generated:
+            # For generated guides, add all channels found
+            for channel in guide.channels():
+                _LOGGER.debug(
+                    f"Generated file ({file_name}): adding channel {channel.name()} with {len(channel.get_programmes())} programmes"
+                )
+                entities.append(
+                    ChannelSensor(
+                        coordinator, channel.id, channel.name(), config_options
+                    )
+                )
+        else:
+            # For specific files, add only selected channels
+            selected_channels_names = config_options.get("selected_channels", [])
+            _LOGGER.debug(
+                f"File ({file_name}): looking for selected channels: {selected_channels_names}"
+            )
+            for channel_name in selected_channels_names:
+                channel = guide.get_channel_by_id(channel_name)
+                if channel:
+                    _LOGGER.debug(
+                        f"File ({file_name}): adding channel {channel.name()} with {len(channel.get_programmes())} programmes"
+                    )
+                    entities.append(
+                        ChannelSensor(
+                            coordinator, channel.id, channel.name(), config_options
+                        )
+                    )
+                else:
+                    _LOGGER.warning(
+                        f"File ({file_name}): selected channel '{channel_name}' not found in the guide data."
+                    )
+    else:
+        _LOGGER.warning(
+            f"Initial guide data fetch failed or returned no data for entry {config_entry.entry_id}. No sensors will be created initially."
+        )
+        # Depending on requirements, you might still want to add entities in an 'unavailable' state
+        # or rely on the coordinator retrying later.
+
+    if entities:
+        async_add_entities(entities)
+        _LOGGER.debug(
+            f"Added {len(entities)} channel sensors for {config_entry.entry_id}"
+        )
+    else:
+        _LOGGER.debug(f"No channel sensors added for {config_entry.entry_id}")
+
+    # result_sensor = EPGBasicSensor(hass, config)
+    # async_add_entities([result_sensor], True)
+    # hass.data.setdefault(DOMAIN, {})[config.entry_id] = {"result_sensor": result_sensor}
+    # await update_channels(_config, False)
     hass.services.async_register(
         DOMAIN,
         "handle_update_channels",
         handle_update_channels,
     )
 
+
 def read_file(file):
     with open(file, "r") as guide_file:
         content = guide_file.readlines()
     content = "".join(content)
     return content
-def write_file(file,data):
+
+
+def write_file(file, data):
     with open(file, "w") as file:
         file.write(data)
         file.close()
 
 
-
-async def get_guide(hass: HomeAssistant, _config,force):
-    file= _config.get("file_name")
-    if _config.get("generated"):
-        guide_url = f"https://www.open-epg.com/generate/{file}.xml"
-        selected_channels="ALL"
-    else:
-        file=''.join(file.split()).lower()
-        guide_url = f"https://www.open-epg.com/files/{file}.xml"
-        selected_channels=_config.get("selected_channels")
-    guide_file = _config.get("file_path")
-
-    if os.path.isfile(guide_file) and not force:
-        _LOGGER.debug(f"Loading guide from existing file ({file})")
-        content= await hass.async_add_executor_job(read_file, guide_file)
-        time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
-        guide = Guide(content,selected_channels,time_zone)
-    else:
-        if force:
-            _LOGGER.debug(f"fetching the guide by force ({file})")
-        else:
-            _LOGGER.debug(f"fetching the guide first time ({file})")
-        os.makedirs(os.path.dirname(guide_file), exist_ok=True)
-        guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
-
-    if guide is not None and is_need_to_update(guide_file):
-        _LOGGER.debug(f"updating the guide ({file})")
-        guide = await fetch_guide(hass,guide_url,guide_file,selected_channels)
-    return guide
-
-def is_need_to_update(guide_file: str, hours=12) -> bool:
-    """Check if the guide file needs to be updated."""
-    try:
-        mod_timestamp = os.path.getmtime(guide_file)
-        mod_datetime = datetime.datetime.fromtimestamp(mod_timestamp)
-        now_datetime = datetime.datetime.now()
-        time_threshold = datetime.timedelta(hours=hours)
-        time_difference = now_datetime - mod_datetime
-        _LOGGER.debug(f"is_need_to_update return '{time_difference >= time_threshold}'")
-        return time_difference >= time_threshold
-    except FileNotFoundError:
-        _LOGGER.debug(f"Error: File not found at '{guide_file}'")
-        return True
-    except Exception as e:
-        _LOGGER.debug(f"An error occurred checking file '{guide_file}': {e}")
-        return True
-
-async def fetch_guide(hass: HomeAssistant,url,file,selected_channels) -> Guide:
-    session = async_get_clientsession(hass)
-    _LOGGER.debug("timezone: "+hass.config.time_zone)
-    time_zone= await hass.async_add_executor_job(pytz.timezone,hass.config.time_zone)
-    guide = None
-    try:
-        response = await session.get(url)
-        response.raise_for_status()
-        data = await response.text()
-        if data is not None:
-            if "channel" in data:
-                await hass.async_add_executor_job(write_file, file,data)
-                guide = Guide(data,selected_channels,time_zone)
-            else:
-                _LOGGER.error("Cannoat retrive date. data is: %s",data )
-                raise PlatformNotReady("Connection to the service failed.\n %s",data )
-        else:
-            _LOGGER.error("Unable to retrieve guide from %s", url)
-            raise PlatformNotReady("Connection to the service failed.")
-
-    except aiohttp.ClientError as error:
-        _LOGGER.error("Error while retrieving guide: %s", error)
-        raise PlatformNotReady("Connection to the service failed.: %s", error)
-
-    return guide
-
-
-class ChannelSensor(SensorEntity):
+class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
     """Representation of a ChannelSensor ."""
+
     _attr_icon: str = ICON
-    def __init__(self, hass,config, name, data) -> None:
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        coordinator: EpgDataUpdateCoordinator,
+        channel_id: str,
+        channel_name: str,
+        config_options: dict,
+    ) -> None:
         """Initialize the sensor."""
-        self._data = data
-        self._attributes: {}
-        self._state: data.get_current_title()
-        self._attr_name = f"{name[:-3]}"
-        self._hass = hass
-        self._config=config
+        # Pass the coordinator to CoordinatorEntity
+        super().__init__(coordinator)
+
+        self._channel_id = channel_id
+        self._channel_name = channel_name  # Keep original name for reference if needed
+        self._config_options = config_options
+
+        # Set unique ID and device info if you have a device associated with the config entry
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{self._channel_id}"
+        # Example device info - link sensor to the config entry's device
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
+            "name": f"EPG {config_options.get('file_name', coordinator.config_entry.entry_id)}",
+            "manufacturer": "Open-EPG",  # Or your integration name
+            "entry_type": "service",  # Or DEVICE_INFO_ENTRY_TYPE_SERVICE if imported
+        }
+        # Sensor name will be based on channel name (stripping .uk etc.)
+        self._attr_name = f"{channel_name[:-3]}"
 
     @property
-    def unique_id(self) -> str | None:
-        return self._data.id
+    def _channel_data(self) -> Guide.Channel | None:
+        """Helper to get the specific channel data from the coordinator."""
+        if self.coordinator.data:
+            return self.coordinator.data.get_channel_by_id(self._channel_id)
+        return None
 
     @property
-    def state(self):
+    def available(self) -> bool:
+        """Return True if coordinator has data and channel exists."""
+        # Sensor is available if the coordinator successfully updated
+        # and the specific channel data can be retrieved.
+        return super().available and self._channel_data is not None
+
+    @property
+    def native_value(self):  # Use native_value instead of state
         """Return the state of the device."""
-        self._state = self._data.get_current_title()
-        if self._state is None:
-            return "Unavilable"
-        return self._state
+        channel = self._channel_data
+        if channel:
+            current_title = channel.get_current_title()
+            return (
+                current_title if current_title is not None else "Unavailable"
+            )  # Or None
+        return "Unavailable"  # Or None if the channel data isn't found
 
     @property
-    def extra_state_attributes(self) -> dict[str, str]:
-        if self._config.get("full_schedule"):
-            ret = self._data.get_programmes_per_day()
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Return the state attributes."""
+        channel = self._channel_data
+        if not channel:
+            return None
+
+        if self._config_options.get("full_schedule"):
+            ret = channel.get_programmes_per_day()
         else:
-            ret = self._data.get_programmes_for_today()
-        ret["desc"] = self._data.get_current_desc()
+            ret = channel.get_programmes_for_today()
+
+        # Ensure 'desc' key exists even if description is None
+        ret["desc"] = channel.get_current_desc() or "No description"
+
+        # Add next program info?
+        next_prog = channel.get_next_programme()
+        if next_prog:
+            ret["next_program_title"] = next_prog.title
+            ret["next_program_start_time"] = next_prog.start_hour
+            ret["next_program_end_time"] = next_prog.end_hour
+            ret["next_program_desc"] = next_prog.desc or "No description"
+        else:
+            ret["next_program_title"] = "Unavailable"
+
+        # Add channel metadata if useful
+        ret["channel_id"] = channel.id
+        ret["channel_display_name"] = channel.name()
+
         return ret
-
-    async def async_added_to_hass(self) -> None:
-        """Handle when the entity is added to Home Assistant."""
-
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, UPDATE_TOPIC, self._force_update)
-        )
-
-    async def _force_update(self) -> None:
-        """Force update of data."""
-        _LOGGER.debug("_force_update")
-        self.async_write_ha_state()
-
