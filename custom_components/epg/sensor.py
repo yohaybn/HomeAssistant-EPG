@@ -7,7 +7,6 @@ from typing import Final
 import os
 import datetime
 from .guide_classes import Guide
-from .result_sensor import EPGBasicSensor
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.config_entries import ConfigEntry
@@ -214,10 +213,7 @@ async def async_setup_entry(
     else:
         _LOGGER.debug(f"No channel sensors added for {config_entry.entry_id}")
 
-    # result_sensor = EPGBasicSensor(hass, config)
-    # async_add_entities([result_sensor], True)
-    # hass.data.setdefault(DOMAIN, {})[config.entry_id] = {"result_sensor": result_sensor}
-    # await update_channels(_config, False)
+
     hass.services.async_register(
         DOMAIN,
         "handle_update_channels",
