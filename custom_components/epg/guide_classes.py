@@ -8,34 +8,52 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class Programme:
-    def __init__(self, start, stop, title, desc,time_zone) -> None:
+    def __init__(self, start, stop, title, desc, time_zone) -> None:
         """Initialize the sensor."""
 
-        #_LOGGER.debug(f"timezone: {time_zone}")
+        # _LOGGER.debug(f"timezone: {time_zone}")
         self._start = datetime.strptime(start, "%Y%m%d%H%M%S %z")
         self._stop = datetime.strptime(stop, "%Y%m%d%H%M%S %z")
         self.start_hour = self._start.astimezone(time_zone).strftime("%H:%M")
         self.end_hour = self._stop.astimezone(time_zone).strftime("%H:%M")
         self.title = title
         self.desc = desc
-        #_LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
+        # _LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
+
+    def title(self):
+        """Return the title of the program."""
+        return self.title
+
+    def start_time_local_str(self) -> str:
+        """Return the start time in local timezone."""
+        return self._start.astimezone(self._time_zone).strftime("%H:%M")
+
+    def end_time_local_str(self) -> str:
+        """Return the start time in local timezone."""
+        return self._end.astimezone(self._time_zone).strftime("%H:%M")
+
+    def desc(self):
+        """Return the description of the program."""
+        return self.desc
 
 
 class Channel:
-    def __init__(self, id, name, lang,time_zone) -> None:
+    """Represents a TV channel with its associated programs and metadata."""
+
+    def __init__(self, id, name, lang, time_zone) -> None:
         """Initialize the sensor."""
         self._programmes = []
         self._name = name
         self.id = id
         self._lang = lang
-        self._time_zone=time_zone
-
-
+        self._time_zone = time_zone
 
     def name(self) -> str:
         return self._name
+
     def id(self) -> str:
         return self.id
+
     def add_programme(self, programme) -> None:
         """Initialize the sensor."""
         self._programmes.append(programme)
@@ -43,16 +61,16 @@ class Channel:
     def get_programmes(self) -> dict[str, str]:
         ret = {}
         for programme in self._programmes:
-            ret[
-                programme.title
-            ] = f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour }\n\tend: {programme.end_hour }"
+            ret[programme.title] = (
+                f"\n\tdesc: {programme.desc}\n\tstart: {programme.start_hour}\n\tend: {programme.end_hour}"
+            )
         return ret
 
     def get_programmes_by_start(self) -> dict[str, str]:
         ret = {}
         for programme in self._programmes:
             ret[programme.start_hour] = (
-                "{ " + f'"title":{programme.title },"desc":  {programme.desc}  ' + " }"
+                "{ " + f'"title":{programme.title},"desc":  {programme.desc}  ' + " }"
             )
         return ret
 
@@ -63,7 +81,7 @@ class Channel:
             if programme._start >= now:
                 ret[programme.start_hour] = (
                     "{ "
-                    + f'"title":{programme.title },"desc":  {programme.desc}  '
+                    + f'"title":{programme.title},"desc":  {programme.desc}  '
                     + " }"
                 )
         return ret
@@ -73,14 +91,11 @@ class Channel:
         ret["today"] = {}
 
         now = self._time_zone.localize(datetime.now())
-        utc_offset=now.utcoffset().total_seconds()/60/60
+        utc_offset = now.utcoffset().total_seconds() / 60 / 60
         for programme in self._programmes:
             # add timezone offset to fix issue with start date is wrong day
-            _start_date=(programme._start+ timedelta(hours=utc_offset)).date()
-            if (
-                programme._start >= now
-                and _start_date == datetime.today().date()
-            ):
+            _start_date = (programme._start + timedelta(hours=utc_offset)).date()
+            if programme._start >= now and _start_date == datetime.today().date():
                 obj = {}
                 obj["title"] = programme.title
                 obj["desc"] = programme.desc
@@ -95,10 +110,12 @@ class Channel:
         ret["tomorrow"] = {}
         now = self._time_zone.localize(datetime.now())
 
-        utc_offset=now.utcoffset().total_seconds()/60/60
+        utc_offset = now.utcoffset().total_seconds() / 60 / 60
         for programme in self._programmes:
             if programme._start >= now:
-                _start_date=(programme._start+ timedelta(hours=utc_offset)).date() # add timezone offset to fix issue with time zone for
+                _start_date = (
+                    programme._start + timedelta(hours=utc_offset)
+                ).date()  # add timezone offset to fix issue with time zone for
                 if _start_date == datetime.today().date():
                     obj = {}
                     obj["title"] = programme.title
@@ -126,38 +143,63 @@ class Channel:
             ),
             None,
         )
+
+    def get_next_programme(self) -> Programme:
+        current = self.get_current_programme()
+        if current is None:
+            return None
+        return next(
+            (
+                programme
+                for programme in self._programmes
+                if programme._start == current._stop
+            ),
+            None,
+        )
+
     def get_current_title(self) -> str:
-        p=self.get_current_programme()
+        p = self.get_current_programme()
         if p is None:
             return "Unavilable"
         return p.title
+
     def get_current_desc(self) -> str:
-        p=self.get_current_programme()
+        p = self.get_current_programme()
         if p is None:
             return "Unavilable"
         return p.desc
+
+
 class Guide:
-    TIMEZONE=None
-    def __init__(self, text,selected_channels,time_zone) -> None:
+    TIMEZONE = None
+
+    def __init__(self, text, selected_channels, time_zone) -> None:
         """Initialize the class"""
         self._channels = []
-        self.TIMEZONE=time_zone
+        self.TIMEZONE = time_zone
         soup = BeautifulSoup(text, "xml")
 
         for channel in soup.find_all("channel"):
             display_name = next(channel.children)
-            if(selected_channels =="ALL" or display_name.text in selected_channels):
-                _channel = Channel(channel["id"], display_name.text, display_name.get("lang"),time_zone)
+            if selected_channels == "ALL" or display_name.text in selected_channels:
+                _channel = Channel(
+                    channel["id"],
+                    display_name.text,
+                    display_name.get("lang"),
+                    time_zone,
+                )
                 for prog in soup.find_all("programme", {"channel": channel["id"]}):
                     children = prog.children
                     title = next(children).text
                     try:
                         desc = next(children).text
-                        if not desc: #for generated files that contains <Sub-title>
+                        if not desc:  # for generated files that contains <Sub-title>
                             desc = next(children).text
                     except:
-                        desc=""
-                    _prog = Programme(prog["start"], prog["stop"], title, desc,time_zone)
+                        desc = ""
+                    _prog = Programme(
+                        prog["start"], prog["stop"], title, desc, time_zone
+                    )
                     _channel.add_programme(_prog)
                 self.add_cahnnel(_channel)
 
@@ -165,18 +207,8 @@ class Guide:
         """Initialize the sensor."""
         self._channels.append(channel)
 
-    def get_channel(self, id) -> Channel:
-        return next(
-            (channel for channel in self._channels if channel.id == id), None
-        )
-    def channels(self) :
+    def get_channel_by_id(self, id) -> Channel:
+        return next((channel for channel in self._channels if channel.id == id), None)
+
+    def channels(self):
         return self._channels
-    def is_need_to_update(self) -> bool:
-        """check if need to take new guide from web. (take once a day- guide is for 2 days)"""
-        channel = self._channels[0]
-        return not ( channel._programmes and(
-            channel._programmes[-1]._start.date()
-            == (datetime.today() + timedelta(days=1)).date() or #handle timezone issues
-            channel._programmes[-1]._start.date()
-            > (datetime.today() + timedelta(days=1)).date() )
-        )
