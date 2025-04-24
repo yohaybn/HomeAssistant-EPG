@@ -74,11 +74,11 @@ class Channel:
             )
         return ret
 
-    def get_programmes_from_now_by_start(self) -> dict[str, str]:
+    def get_programmes_from_now_by_end(self) -> dict[str, str]:
         ret = {}
         now = self._time_zone.localize(datetime.now())
         for programme in self._programmes:
-            if programme._start >= now:
+            if programme._stop >= now:
                 ret[programme.start_hour] = (
                     "{ "
                     + f'"title":{programme.title},"desc":  {programme.desc}  '
@@ -112,7 +112,7 @@ class Channel:
 
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
         for programme in self._programmes:
-            if programme._start >= now:
+            if programme._stop >= now:
                 _start_date = (
                     programme._start + timedelta(hours=utc_offset)
                 ).date()  # add timezone offset to fix issue with time zone for
@@ -184,7 +184,7 @@ class Guide:
             if selected_channels == "ALL" or display_name.text in selected_channels:
                 _channel = Channel(
                     channel["id"],
-                    display_name.text,
+                    display_name.text[:-3],
                     display_name.get("lang"),
                     time_zone,
                 )
