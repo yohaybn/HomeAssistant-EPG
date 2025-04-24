@@ -8,25 +8,24 @@ import os
 import datetime
 from .guide_classes import Guide
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.exceptions import PlatformNotReady
 from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.components.sensor import (
     SensorEntity,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
 )
+
 import aiohttp
 import pytz
 
-from homeassistant.helpers.entity_registry import async_get as get_entity_registry
 from .const import (
     DOMAIN,
     ICON,
-    UPDATE_TOPIC,
 )
 from datetime import timedelta
 from homeassistant.helpers.update_coordinator import (
@@ -86,7 +85,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
         guide = None
 
         try:
-            _LOGGER.debug(f"Coordinator: Fetching guide from {guide_url}")
+            _LOGGER.debug("Coordinator: Fetching guide from %s", guide_url)
             response = await session.get(guide_url)
             response.raise_for_status()
             data = await response.text()
@@ -143,6 +142,161 @@ async def async_setup_entry(
             _LOGGER.warning(
                 f"Could not find coordinator for entry_id: {entry_id_to_refresh} to refresh."
             )
+
+    # --- Service Handler: Search Program ---
+    async def handle_search_program(
+        call: ServiceCall,
+    ) -> ServiceResponse:
+        """Handle the service call to search for programs and return results."""
+        search_title = call.data.get("title", "").lower()
+        search_channel_name = call.data.get("channel_name")
+        date_filter = call.data.get("date_filter", "all_future")
+        target_entry_id = call.data.get("entry_id")
+
+        # Validate required input
+        if not search_title:
+            _LOGGER.error("Search program service called without a title.")
+            return {"results": []}
+
+        _LOGGER.info(
+            f"Starting EPG search for program title containing '{search_title}', "
+            f"channel: '{search_channel_name or 'Any'}', "
+            f"date filter: '{date_filter}', entry_id: '{target_entry_id or 'All Entries'}'"
+        )
+
+        search_results = []
+        coordinators_to_search: list[EpgDataUpdateCoordinator] = []
+
+        # Determine which coordinator(s) to search based on target_entry_id
+        all_coordinators = hass.data.get(DOMAIN, {})
+        if target_entry_id:
+            coordinator = all_coordinators.get(target_entry_id)
+            if coordinator and isinstance(coordinator, EpgDataUpdateCoordinator):
+                coordinators_to_search.append(coordinator)
+                _LOGGER.debug(f"Searching within specified entry: {target_entry_id}")
+            else:
+                _LOGGER.warning(
+                    f"Search target entry_id '{target_entry_id}' not found or is not a valid EPG coordinator."
+                )
+        else:
+            coordinators_to_search = [
+                coord
+                for coord in all_coordinators.values()
+                if isinstance(coord, EpgDataUpdateCoordinator)
+            ]
+            _LOGGER.debug(
+                f"Searching across {len(coordinators_to_search)} EPG entries."
+            )
+
+        if not coordinators_to_search:
+            _LOGGER.warning("No valid EPG coordinators found to perform search.")
+            return {"results": []}  # Return empty results
+
+        for coordinator in coordinators_to_search:
+            if (
+                not coordinator.last_update_success
+                or not coordinator.data
+                or not isinstance(coordinator.data, Guide)
+            ):
+                _LOGGER.debug(
+                    f"Skipping coordinator {coordinator.config_entry.entry_id}: "
+                    f"No valid guide data available (last update success: {coordinator.last_update_success})."
+                )
+                continue
+
+            guide: Guide = coordinator.data
+            ## Get the specific timezone associated with this guide instance
+            # tz = guide.TIMEZONE
+            # if not tz:
+            #    _LOGGER.warning(
+            #        f"Skipping coordinator {coordinator.config_entry.entry_id}: Guide timezone is not set."
+            #    )
+            #    continue
+            #
+            ## Calculate dates based on the guide's specific timezone for accurate filtering
+            # try:
+            #    # Ensure datetime.now() is timezone-aware using the guide's timezone
+            #    now_local = datetime.now(tz)
+            #    today_local = now_local.date()
+            #    tomorrow_local = today_local + timedelta(days=1)
+            # except Exception as tz_err:
+            #    _LOGGER.error(
+            #        f"Error getting timezone ({tz}) or calculating dates for search "
+            #        f"in coordinator {coordinator.config_entry.entry_id}: {tz_err}"
+            #    )
+            #    continue  # Skip this coordinator if time calculations fail
+            #
+            # _LOGGER.debug(
+            #    f"Processing guide from {coordinator.config_entry.entry_id} (Timezone: {tz}, Today: {today_local})"
+            # )
+
+            # Iterate through each channel in the current guide
+            for channel in guide.channels():
+                # Filter by channel name if specified by the user
+                # Note: Channel names in guide data might include suffixes like HD, +1 etc.
+                if search_channel_name and channel.name() != search_channel_name:
+                    continue  # Skip this channel if name doesn't match filter
+                all_programmes = channel.get_programmes_per_day()
+
+                if date_filter in ["today", "any"]:
+                    for programme in all_programmes.get("today", []).values():
+                        # programme=all_programmes.get("today", []).get(key)
+                        if search_title in programme.get("title").lower():
+                            hour, minute = map(int, programme.get("start").split(":"))
+                            start_datetime_iso = (
+                                datetime.datetime.now()
+                                .replace(
+                                    hour=hour, minute=minute, second=0, microsecond=0
+                                )
+                                .isoformat()
+                            )
+                            search_results.append(
+                                {
+                                    "channel_name": channel.name(),
+                                    "title": programme.get("title"),
+                                    "description": programme.get("desc")
+                                    or "No description",
+                                    "start_time": programme.get("start"),
+                                    "end_time": programme.get("end"),
+                                    "date": datetime.date.today(),
+                                    "start_datetime_iso": start_datetime_iso,
+                                }
+                            )
+                if date_filter in ["tomorrow", "any"]:
+                    for programme in all_programmes.get("tomorrow", []).values():
+                        # Filter by program title (case-insensitive partial match)
+                        if search_title in programme.get("title").lower():
+                            hour, minute = map(int, programme.get("start").split(":"))
+                            start_datetime_iso = (
+                                (datetime.datetime.now() + timedelta(days=1))
+                                .replace(
+                                    hour=hour, minute=minute, second=0, microsecond=0
+                                )
+                                .isoformat()
+                            )
+                            search_results.append(
+                                {
+                                    "channel_name": channel.name(),
+                                    "title": programme.get("title"),
+                                    "description": programme.get("desc")
+                                    or "No description",
+                                    "start_time": programme.get("start"),
+                                    "end_time": programme.get("end"),
+                                    "date": datetime.date.today()
+                                    + timedelta(1),  # YYYY-MM-DD date string (local)
+                                    "start_datetime_iso": start_datetime_iso,
+                                }
+                            )
+        # --- Finalize and Return Results ---
+        _LOGGER.info(
+            f"EPG search completed. Found {len(search_results)} matches for title '{search_title}'."
+        )
+
+        # Sort the collected results chronologically by their start time
+        sorted_results = sorted(search_results, key=lambda x: x["start_datetime_iso"])
+
+        # Return the results dictionary directly, conforming to the response schema
+        return {"results": sorted_results}
 
     _LOGGER.debug(
         f"Setting up entry: {config_entry.entry_id} with options: {config_entry.options}"
@@ -213,12 +367,22 @@ async def async_setup_entry(
     else:
         _LOGGER.debug(f"No channel sensors added for {config_entry.entry_id}")
 
-
     hass.services.async_register(
         DOMAIN,
         "handle_update_channels",
         handle_update_channels,
     )
+    # Register the search service (ensure it's registered only once)
+    if not hass.services.has_service(DOMAIN, "search_program"):
+        hass.services.async_register(
+            DOMAIN,
+            "search_program",
+            handle_search_program,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: epg.search_program")
+    else:
+        _LOGGER.debug("Service epg.search_program already registered.")
 
 
 def read_file(file):
