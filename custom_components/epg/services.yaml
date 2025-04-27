@@ -53,9 +53,6 @@ search_program:
       selector:
         config_entry:
           integration: epg
-  response:
-    data: true # Signals that this service returns data
-    description: Contains the list of matching programs found.
 
 
 
