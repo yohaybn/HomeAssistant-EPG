@@ -56,21 +56,7 @@ search_program:
   response:
     data: true # Signals that this service returns data
     description: Contains the list of matching programs found.
-    example: >
-      {
-        "results": [
-          {
-            "channel_name": "BBC One HD",
-            "title": "BBC News at Six",
-            "description": "The latest national and international news...",
-            "start_time": "18:00",
-            "end_time": "18:30",
-            "date": "2023-10-27",
-            "start_datetime_iso": "2023-10-27T18:00:00+01:00",
 
-          }
-        ]
-      }
 
 
 
