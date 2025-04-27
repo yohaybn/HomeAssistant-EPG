@@ -67,17 +67,127 @@ open-epg.com allows the creation of custom EPG files with selected channels. To 
 2. Select channels to include in your custom EPG file.
 3. Once generated (updated daily), use the unique file ID (e.g., 122DjgdtAA), visible in the generated URL.
 
+## Assist Integration
+
+You can integrate the EPG information with Home Assistant's assist feature using the following automation. **Please note that this is a basic implementation example and can be considered a "hack" to expose EPG sensor data to the Assist conversation agent.** You are free to modify the `command` triggers, the `id` of the automation, and even use a different conversation `agent_id` if you have other agents configured.
+
+To add this automation to your Home Assistant configuration, you can either:
+
+1.  **Use the Automation UI:** Go to **Settings > Automations & Scenes**, click on the **+** button to create a new automation, and then click on the three dots in the top right corner to select "Edit in YAML". Paste the YAML code below and save.
+2.  **Use configuration.yaml:** Add the automation directly to your `automations.yaml` file (or include it from your `configuration.yaml`).
+```yaml
+alias: TV Guide Information
+description: Provides TV program information by querying EPG entities.
+id: your_unique_automation_id
+triggers:
+  - trigger: conversation
+    command:
+      - what's on {channal}
+      - what's on {channal} at {time}
+      - what is playing on {channal}
+      - what is the program on {channal}
+      - tell me what's on {channal}
+      - what is next on {channal}
+      - what's playing next on {channal}
+      - when is {program_title} on
+      - when is {program_title} playing
+      - what time is {program_title} on
+      - is {program_title} on today
+      - is {program_title} on tomorrow
+conditions: []
+actions:
+  - action: conversation.process
+    metadata: {}
+    data:
+      agent_id: conversation.google_generative_ai
+      text: >-
+        '{{trigger.user_input.text }}? answer based on following information: {%
+        for entity in integration_entities("epg") %}{{ state_attr(entity,
+        "friendly_name") }} : current: {{ states(entity) }} {{state_attr(entity,
+        "today") }} {%- endfor %}'
+    response_variable: result
+  - set_conversation_response: "{{ result.response.speech.plain.speech }}"
+mode: single
+```
 
 ## Services
 
 The following services are implemented by the component:
-- `update_channels` - Force update Guide file
-    ```
-    service: epg.handle_update_channels
-    data:
-      entry_id: a9dcc3edcdd1e421c62ea735a9747cd6
-    ```
+### Update Channels
 
+**Service Name:** `epg.update_channels`
+
+**Description:** Force update Guide file.
+
+**Fields:**
+
+| Name       | Description                         | Required | Selector Type |
+|------------|-------------------------------------|----------|---------------|
+| `entry_id` | The ID of the config_entry to update| true     | Config Entry (filtered by 'epg' integration) |
+
+**Example Service Call:**
+You can call this service from the Developer Tools -> Services menu in Home Assistant.
+
+```yaml
+service: epg.update_channels
+data:
+  entry_id: a9dcc3edcdd1e421c62ea735a9747cd6 # Replace with the actual ID of your EPG config entry
+Search EPG Program Service
+```
+
+### Search EPG Program Service
+
+
+**Service Name:** `Search EPG Program`
+
+**Description:** Searches for a program title across configured EPG channels and returns matching schedules directly in the response.
+
+**Fields:**
+
+| Name          | Description                                                                  | Required | Example        | Selector Type |
+|---------------|------------------------------------------------------------------------------|----------|----------------|---------------|
+| `title`       | The program title (or part of it) to search for (case-insensitive).          | true     | "News at Ten"  | Text input    |
+| `channel_name`| (Optional) Filter results to only this specific channel name (exact match, case-sensitive from guide data). | false    | "BBC One HD"   | Text input    |
+| `date_filter` | (Optional) Filter results by date. 'any' includes 'today' and 'tomorrow'.  | false    | 'today'        | Select input  |
+
+**Example Service Call:**
+
+```yaml
+service: epg.search_program
+data:
+  title: "Good Men"
+  channel_name: "AMC - Canada HD"  #Optional
+  date_filter: "today"  #Optional
+
+```
+
+**Example Service Response:**
+
+The service will return a list of matching programs with their details.
+```yaml
+results:
+  - channel_name: AMC - Canada HD
+    title: A Few Good Men
+    description: >-
+      Navy lawyers (Tom Cruise, Demi Moore) defend two Marines accused of
+      killing a private at the naval station at Guantanamo Bay, Cuba. Starring
+      Tom Cruise, Jack Nicholson, Demi Moore.
+    start_time: "14:30"
+    end_time: "17:30"
+    date: "2025-04-27"
+    start_datetime_iso: "2025-04-27T14:30:00"
+
+
+```
+
+## Assist Integration
+
+You can integrate the EPG information with Home Assistant's assist feature using the following automation. **Please note that this is a basic implementation example and can be considered a "hack" to expose EPG sensor data to the Assist conversation agent.** You are free to modify the `command` triggers, the `id` of the automation, and even use a different conversation `agent_id` if you have other agents configured.
+
+To add this automation to your Home Assistant configuration, you can either:
+
+1.  **Use the Automation UI:** Go to **Settings > Automations & Scenes**, click on the **+** button to create a new automation, and then click on the three dots in the top right corner to select "Edit in YAML". Paste the YAML code below and save.
+2.  **Use configuration.yaml:** Add the automation directly to your `automations.yaml` file (or include it from your `configuration.yaml`).
 
 ## Displaying Television Programming in Lovelace
 Recommended: For a more visually appealing and feature-rich display of your EPG data, it's highly recommended to use the [Lovelace EPG Card](https://github.com/yohaybn/lovelace-epg-card).  This custom card is specifically designed to work seamlessly with the HomeAssistant-EPG integration and provides a dynamic timeline view of your TV programming.
