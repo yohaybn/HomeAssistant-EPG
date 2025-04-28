@@ -8,7 +8,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class Programme:
-    def __init__(self, start, stop, title, desc, time_zone) -> None:
+    def __init__(self, start, stop, title, sub_title, desc, time_zone) -> None:
         """Initialize the sensor."""
 
         # _LOGGER.debug(f"timezone: {time_zone}")
@@ -18,6 +18,7 @@ class Programme:
         self.end_hour = self._stop.astimezone(time_zone).strftime("%H:%M")
         self.title = title
         self.desc = desc
+        self.sub_title = sub_title
         # _LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
 
     def title(self):
@@ -35,6 +36,10 @@ class Programme:
     def desc(self):
         """Return the description of the program."""
         return self.desc
+
+    def sub_title(self):
+        """Return the sub_title of the program."""
+        return self.sub_title
 
 
 class Channel:
@@ -99,6 +104,8 @@ class Channel:
                 obj = {}
                 obj["title"] = programme.title
                 obj["desc"] = programme.desc
+                obj["sub_title"] = programme.sub_title
+
                 obj["start"] = programme.start_hour
                 obj["end"] = programme.end_hour
                 ret["today"][programme.start_hour] = obj
@@ -120,6 +127,8 @@ class Channel:
                     obj = {}
                     obj["title"] = programme.title
                     obj["desc"] = programme.desc
+                    obj["sub_title"] = programme.sub_title
+
                     obj["start"] = programme.start_hour
                     obj["end"] = programme.end_hour
                     ret["today"][programme.start_hour] = obj
@@ -127,6 +136,7 @@ class Channel:
                     obj = {}
                     obj["title"] = programme.title
                     obj["desc"] = programme.desc
+                    obj["sub_title"] = programme.sub_title
                     obj["start"] = programme.start_hour
                     obj["end"] = programme.end_hour
                     ret["tomorrow"][programme.start_hour] = obj
@@ -169,6 +179,12 @@ class Channel:
             return "Unavilable"
         return p.desc
 
+    def get_current_subtitle(self) -> str:
+        p = self.get_current_programme()
+        if p is None:
+            return "Unavilable"
+        return p.sub_title
+
 
 class Guide:
     TIMEZONE = None
@@ -188,17 +204,24 @@ class Guide:
                     display_name.get("lang"),
                     time_zone,
                 )
+                _LOGGER.debug("setting channel %s", display_name)
                 for prog in soup.find_all("programme", {"channel": channel["id"]}):
-                    children = prog.children
-                    title = next(children).text
-                    try:
-                        desc = next(children).text
-                        if not desc:  # for generated files that contains <Sub-title>
-                            desc = next(children).text
-                    except:
-                        desc = ""
+                    children = prog.findChildren()
+                    title = "Not Available"
+                    desc = ""
+                    sub_title = ""
+                    for child in children:
+                        if child.name == "title":
+                            title = child.text
+                            continue
+                        if child.name == "desc":
+                            desc = child.text
+                            continue
+                        if child.name.lower() == "sub-title":
+                            sub_title = child.text
+                            continue
                     _prog = Programme(
-                        prog["start"], prog["stop"], title, desc, time_zone
+                        prog["start"], prog["stop"], title, sub_title, desc, time_zone
                     )
                     _channel.add_programme(_prog)
                 self.add_cahnnel(_channel)
