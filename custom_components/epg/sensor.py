@@ -58,17 +58,60 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
             update_interval=update_interval,
         )
 
+    def need_to_update(self, file_path: str) -> bool:
+        """Check if the file needs to be updated."""
+        if not os.path.exists(file_path):
+            return True
+        file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+        return (datetime.datetime.now() - file_mod_time) > timedelta(hours=24)
+
     async def _async_update_data(self) -> Guide | None:
         """Fetch data from API endpoint.
 
-        This is the place to fetch data.
+        if not self.need_to_update(file_path):
         """
         _LOGGER.debug("Coordinator: Starting data update")
         file_name = self.config_options.get("file_name")
         generated = self.config_options.get("generated", False)
         selected_channels = self.config_options.get("selected_channels", [])
         file_path = self.config_options.get("file_path")
+        time_zone = await self.hass.async_add_executor_job(
+            pytz.timezone, self.hass.config.time_zone
+        )
+        if not self.need_to_update(file_path):
+            try:
+                # Read file content asynchronously using executor job
+                local_data = await self.hass.async_add_executor_job(
+                    read_file, file_path
+                )
+                if not local_data:
+                    _LOGGER.warning(
+                        "Local file '%s' exists but is empty or could not be read.",
+                        file_path,
+                    )
 
+                else:
+                    guide = await self.hass.async_add_executor_job(
+                        Guide, local_data, selected_channels, time_zone
+                    )
+                    _LOGGER.info(
+                        "Successfully loaded EPG guide from local file: %s", file_path
+                    )
+                    self._guide = guide  # Update internal state
+                    return guide  # Return the guide loaded from the file
+
+            except FileNotFoundError:
+                _LOGGER.warning(
+                    "Local file '%s' not found unexpectedly. Will attempt network fetch.",
+                    file_path,
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "Failed to read or parse local EPG file '%s': %s. "
+                    "Will attempt to fetch from network.",
+                    file_path,
+                    err,
+                )
         if generated:
             guide_url = f"https://www.open-epg.com/generate/{file_name}.xml"
             selected_channels_param = "ALL"  # Guide class handles "ALL"
@@ -79,9 +122,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
             selected_channels_param = selected_channels
 
         session = async_get_clientsession(self.hass)
-        time_zone = await self.hass.async_add_executor_job(
-            pytz.timezone, self.hass.config.time_zone
-        )
+
         guide = None
 
         try:
@@ -111,7 +152,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
                 _LOGGER.error(
                     f"Coordinator: No valid 'channel' data received from {guide_url}. Response snippet: {data[:200]}"
                 )
-                return self._guide
+                return self._guide  # Keep old data on error
 
         except aiohttp.ClientError as err:
             _LOGGER.error(f"Coordinator: Error fetching guide from {guide_url}: {err}")
@@ -205,32 +246,7 @@ async def async_setup_entry(
                 continue
 
             guide: Guide = coordinator.data
-            ## Get the specific timezone associated with this guide instance
-            # tz = guide.TIMEZONE
-            # if not tz:
-            #    _LOGGER.warning(
-            #        f"Skipping coordinator {coordinator.config_entry.entry_id}: Guide timezone is not set."
-            #    )
-            #    continue
-            #
-            ## Calculate dates based on the guide's specific timezone for accurate filtering
-            # try:
-            #    # Ensure datetime.now() is timezone-aware using the guide's timezone
-            #    now_local = datetime.now(tz)
-            #    today_local = now_local.date()
-            #    tomorrow_local = today_local + timedelta(days=1)
-            # except Exception as tz_err:
-            #    _LOGGER.error(
-            #        f"Error getting timezone ({tz}) or calculating dates for search "
-            #        f"in coordinator {coordinator.config_entry.entry_id}: {tz_err}"
-            #    )
-            #    continue  # Skip this coordinator if time calculations fail
-            #
-            # _LOGGER.debug(
-            #    f"Processing guide from {coordinator.config_entry.entry_id} (Timezone: {tz}, Today: {today_local})"
-            # )
 
-            # Iterate through each channel in the current guide
             for channel in guide.channels():
                 # Filter by channel name if specified by the user
                 # Note: Channel names in guide data might include suffixes like HD, +1 etc.
@@ -428,8 +444,7 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
             "manufacturer": "Open-EPG",  # Or your integration name
             "entry_type": "service",  # Or DEVICE_INFO_ENTRY_TYPE_SERVICE if imported
         }
-        # Sensor name will be based on channel name (stripping .uk etc.)
-        self._attr_name = f"{channel_name[:-3]}"
+        self._attr_name = f"{channel_name}"
 
     @property
     def _channel_data(self) -> Guide.Channel | None:
@@ -470,7 +485,7 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
 
         # Ensure 'desc' key exists even if description is None
         ret["desc"] = channel.get_current_desc() or "No description"
-
+        ret["sub_title"] = channel.get_current_subtitle() or "No subtitle"
         # Add next program info?
         next_prog = channel.get_next_programme()
         if next_prog:
@@ -478,6 +493,7 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
             ret["next_program_start_time"] = next_prog.start_hour
             ret["next_program_end_time"] = next_prog.end_hour
             ret["next_program_desc"] = next_prog.desc or "No description"
+            ret["next_program_sub_title"] = next_prog.sub_title or "No subtitle"
         else:
             ret["next_program_title"] = "Unavailable"
 
