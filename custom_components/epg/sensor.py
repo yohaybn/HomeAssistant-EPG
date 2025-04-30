@@ -5,6 +5,7 @@ import logging
 
 from typing import Final
 import os
+from pathlib import Path
 import datetime
 from .guide_classes import Guide
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -33,6 +34,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.exceptions import HomeAssistantError
 
 # Default scan interval
 _LOGGER: Final = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
 
     def need_to_update(self, file_path: str) -> bool:
         """Check if the file needs to be updated."""
-        if not os.path.exists(file_path):
+        if not Path(file_path).exists():
             return True
         file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
         return (datetime.datetime.now() - file_mod_time) > timedelta(hours=24)
@@ -169,226 +171,27 @@ async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
 ):
     """Set up the EPG sensor platform."""
+    await _register_services(hass, config_entry)
+    coordinator = await _initialize_coordinator(hass, config_entry)
+    entities = await _create_entities(coordinator, config_entry)
+    if entities:
+        async_add_entities(entities)
+
+
+async def _register_services(hass: HomeAssistant, config_entry: ConfigEntry):
+    """Register services for the EPG integration."""
 
     async def handle_update_channels(call):
         """Handle the service call to manually refresh."""
-        entry_id_to_refresh = call.data.get(
-            "entry_id", config_entry.entry_id
-        )  # Refresh specific or this entry
-        _LOGGER.info(f"Manual refresh requested for entry_id: {entry_id_to_refresh}")
-        coordinator_to_refresh = hass.data[DOMAIN].get(entry_id_to_refresh)
-        if coordinator_to_refresh:
-            await coordinator_to_refresh.async_request_refresh()
-        else:
-            _LOGGER.warning(
-                f"Could not find coordinator for entry_id: {entry_id_to_refresh} to refresh."
-            )
+        await _handle_update_channels(hass, config_entry, call)
 
-    # --- Service Handler: Search Program ---
-    async def handle_search_program(
-        call: ServiceCall,
-    ) -> ServiceResponse:
-        """Handle the service call to search for programs and return results."""
-        search_title = call.data.get("title", "").lower()
-        search_channel_name = call.data.get("channel_name")
-        date_filter = call.data.get("date_filter", "all_future")
-        target_entry_id = call.data.get("entry_id")
-
-        # Validate required input
-        if not search_title:
-            _LOGGER.error("Search program service called without a title.")
-            return {"results": []}
-
-        _LOGGER.info(
-            f"Starting EPG search for program title containing '{search_title}', "
-            f"channel: '{search_channel_name or 'Any'}', "
-            f"date filter: '{date_filter}', entry_id: '{target_entry_id or 'All Entries'}'"
-        )
-
-        search_results = []
-        coordinators_to_search: list[EpgDataUpdateCoordinator] = []
-
-        # Determine which coordinator(s) to search based on target_entry_id
-        all_coordinators = hass.data.get(DOMAIN, {})
-        if target_entry_id:
-            coordinator = all_coordinators.get(target_entry_id)
-            if coordinator and isinstance(coordinator, EpgDataUpdateCoordinator):
-                coordinators_to_search.append(coordinator)
-                _LOGGER.debug(f"Searching within specified entry: {target_entry_id}")
-            else:
-                _LOGGER.warning(
-                    f"Search target entry_id '{target_entry_id}' not found or is not a valid EPG coordinator."
-                )
-        else:
-            coordinators_to_search = [
-                coord
-                for coord in all_coordinators.values()
-                if isinstance(coord, EpgDataUpdateCoordinator)
-            ]
-            _LOGGER.debug(
-                f"Searching across {len(coordinators_to_search)} EPG entries."
-            )
-
-        if not coordinators_to_search:
-            _LOGGER.warning("No valid EPG coordinators found to perform search.")
-            return {"results": []}  # Return empty results
-
-        for coordinator in coordinators_to_search:
-            if (
-                not coordinator.last_update_success
-                or not coordinator.data
-                or not isinstance(coordinator.data, Guide)
-            ):
-                _LOGGER.debug(
-                    f"Skipping coordinator {coordinator.config_entry.entry_id}: "
-                    f"No valid guide data available (last update success: {coordinator.last_update_success})."
-                )
-                continue
-
-            guide: Guide = coordinator.data
-
-            for channel in guide.channels():
-                # Filter by channel name if specified by the user
-                # Note: Channel names in guide data might include suffixes like HD, +1 etc.
-                if search_channel_name and channel.name() != search_channel_name:
-                    continue  # Skip this channel if name doesn't match filter
-                all_programmes = channel.get_programmes_per_day()
-
-                if date_filter in ["today", "any"]:
-                    for programme in all_programmes.get("today", []).values():
-                        # programme=all_programmes.get("today", []).get(key)
-                        if search_title in programme.get("title").lower():
-                            hour, minute = map(int, programme.get("start").split(":"))
-                            start_datetime_iso = (
-                                datetime.datetime.now()
-                                .replace(
-                                    hour=hour, minute=minute, second=0, microsecond=0
-                                )
-                                .isoformat()
-                            )
-                            search_results.append(
-                                {
-                                    "channel_name": channel.name(),
-                                    "title": programme.get("title"),
-                                    "description": programme.get("desc")
-                                    or "No description",
-                                    "start_time": programme.get("start"),
-                                    "end_time": programme.get("end"),
-                                    "date": datetime.date.today(),
-                                    "start_datetime_iso": start_datetime_iso,
-                                }
-                            )
-                if date_filter in ["tomorrow", "any"]:
-                    for programme in all_programmes.get("tomorrow", []).values():
-                        # Filter by program title (case-insensitive partial match)
-                        if search_title in programme.get("title").lower():
-                            hour, minute = map(int, programme.get("start").split(":"))
-                            start_datetime_iso = (
-                                (datetime.datetime.now() + timedelta(days=1))
-                                .replace(
-                                    hour=hour, minute=minute, second=0, microsecond=0
-                                )
-                                .isoformat()
-                            )
-                            search_results.append(
-                                {
-                                    "channel_name": channel.name(),
-                                    "title": programme.get("title"),
-                                    "description": programme.get("desc")
-                                    or "No description",
-                                    "start_time": programme.get("start"),
-                                    "end_time": programme.get("end"),
-                                    "date": datetime.date.today()
-                                    + timedelta(1),  # YYYY-MM-DD date string (local)
-                                    "start_datetime_iso": start_datetime_iso,
-                                }
-                            )
-        # --- Finalize and Return Results ---
-        _LOGGER.info(
-            f"EPG search completed. Found {len(search_results)} matches for title '{search_title}'."
-        )
-
-        # Sort the collected results chronologically by their start time
-        sorted_results = sorted(search_results, key=lambda x: x["start_datetime_iso"])
-
-        # Return the results dictionary directly, conforming to the response schema
-        return {"results": sorted_results}
-
-    _LOGGER.debug(
-        f"Setting up entry: {config_entry.entry_id} with options: {config_entry.options}"
-    )
-    config_options = config_entry.options
-
-    coordinator = EpgDataUpdateCoordinator(hass, config_entry, config_options)
-    await coordinator.async_config_entry_first_refresh()
-
-    # Store the coordinator instance
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
-
-    # --- Create entities based on initial coordinator data ---
-    entities = []
-    if (
-        coordinator.data
-    ):  # Check if the initial fetch was successful and returned a Guide
-        guide: Guide = coordinator.data  # Type hint for clarity
-        _LOGGER.debug(f"Found {len(guide.channels())} channels in initial guide data.")
-
-        file_name = config_options.get("file_name")
-        generated = config_options.get("generated", False)
-
-        if generated:
-            # For generated guides, add all channels found
-            for channel in guide.channels():
-                _LOGGER.debug(
-                    f"Generated file ({file_name}): adding channel {channel.name()} with {len(channel.get_programmes())} programmes"
-                )
-                entities.append(
-                    ChannelSensor(
-                        coordinator, channel.id, channel.name(), config_options
-                    )
-                )
-        else:
-            # For specific files, add only selected channels
-            selected_channels_names = config_options.get("selected_channels", [])
-            _LOGGER.debug(
-                f"File ({file_name}): looking for selected channels: {selected_channels_names}"
-            )
-            for channel_name in selected_channels_names:
-                channel = guide.get_channel_by_id(channel_name)
-                if channel:
-                    _LOGGER.debug(
-                        f"File ({file_name}): adding channel {channel.name()} with {len(channel.get_programmes())} programmes"
-                    )
-                    entities.append(
-                        ChannelSensor(
-                            coordinator, channel.id, channel.name(), config_options
-                        )
-                    )
-                else:
-                    _LOGGER.warning(
-                        f"File ({file_name}): selected channel '{channel_name}' not found in the guide data."
-                    )
-    else:
-        _LOGGER.warning(
-            f"Initial guide data fetch failed or returned no data for entry {config_entry.entry_id}. No sensors will be created initially."
-        )
-        # Depending on requirements, you might still want to add entities in an 'unavailable' state
-        # or rely on the coordinator retrying later.
-
-    if entities:
-        async_add_entities(entities)
-        _LOGGER.debug(
-            f"Added {len(entities)} channel sensors for {config_entry.entry_id}"
-        )
-    else:
-        _LOGGER.debug(f"No channel sensors added for {config_entry.entry_id}")
+    async def handle_search_program(call: ServiceCall) -> ServiceResponse:
+        """Handle the service call to search for programs."""
+        return await _handle_search_program(hass, call)
 
     hass.services.async_register(
-        DOMAIN,
-        "handle_update_channels",
-        handle_update_channels,
+        DOMAIN, "handle_update_channels", handle_update_channels
     )
-    # Register the search service (ensure it's registered only once)
     if not hass.services.has_service(DOMAIN, "search_program"):
         hass.services.async_register(
             DOMAIN,
@@ -396,9 +199,140 @@ async def async_setup_entry(
             handle_search_program,
             supports_response=SupportsResponse.ONLY,
         )
-        _LOGGER.debug("Registered service: epg.search_program")
-    else:
-        _LOGGER.debug("Service epg.search_program already registered.")
+
+
+async def _initialize_coordinator(hass: HomeAssistant, config_entry: ConfigEntry):
+    """Initialize the data update coordinator."""
+    coordinator = EpgDataUpdateCoordinator(hass, config_entry, config_entry.options)
+    await coordinator.async_config_entry_first_refresh()
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
+    return coordinator
+
+
+async def _create_entities(coordinator, config_entry):
+    """Create sensor entities based on the coordinator data."""
+    entities = []
+    if coordinator.data:
+        guide: Guide = coordinator.data
+        config_options = config_entry.options
+        file_name = config_options.get("file_name")
+        generated = config_options.get("generated", False)
+
+        if generated:
+            entities.extend(
+                ChannelSensor(coordinator, channel.id, channel.name(), config_options)
+                for channel in guide.channels()
+            )
+        else:
+            selected_channels_names = config_options.get("selected_channels", [])
+            for channel_name in selected_channels_names:
+                channel = guide.get_channel_by_id(channel_name)
+                if channel:
+                    entities.append(
+                        ChannelSensor(
+                            coordinator, channel.id, channel.name(), config_options
+                        )
+                    )
+    return entities
+
+
+async def _handle_update_channels(hass: HomeAssistant, config_entry: ConfigEntry, call):
+    """Handle the service call to manually refresh."""
+    entry_id_to_refresh = call.data.get("entry_id", config_entry.entry_id)
+    coordinator_to_refresh = hass.data[DOMAIN].get(entry_id_to_refresh)
+    if coordinator_to_refresh:
+        file_path = coordinator_to_refresh.config_options.get("file_path", [])
+        if Path(file_path).exists():
+            Path(file_path).rename(f"{file_path}.bak")
+        await coordinator_to_refresh.async_request_refresh()
+        if Path(file_path).exists():
+            _LOGGER.debug("update channels successful")
+            Path(f"{file_path}.bak").unlink()
+        else:
+            _LOGGER.debug("update channels failed")
+
+            raise HomeAssistantError(
+                f"Failed to update channels for entry {entry_id_to_refresh}"
+            )
+
+
+async def _handle_search_program(
+    hass: HomeAssistant, call: ServiceCall
+) -> ServiceResponse:
+    """Handle the service call to search for programs."""
+    search_title = call.data.get("title", "").lower()
+    search_channel_name = call.data.get("channel_name")
+    date_filter = call.data.get("date_filter", "all_future")
+    target_entry_id = call.data.get("entry_id")
+    search_results = []
+    coordinators_to_search = _get_coordinators_to_search(hass, target_entry_id)
+    for coordinator in coordinators_to_search:
+        if coordinator.last_update_success and isinstance(coordinator.data, Guide):
+            search_results.extend(
+                _search_guide(
+                    coordinator.data, search_title, search_channel_name, date_filter
+                )
+            )
+    sorted_results = sorted(search_results, key=lambda x: x["start_datetime_iso"])
+    return {"results": sorted_results}
+
+
+def _get_coordinators_to_search(hass: HomeAssistant, target_entry_id: str):
+    """Get the list of coordinators to search."""
+    all_coordinators = hass.data.get(DOMAIN, {})
+    if target_entry_id:
+        coordinator = all_coordinators.get(target_entry_id)
+        return [coordinator] if coordinator else []
+    return [
+        coord
+        for coord in all_coordinators.values()
+        if isinstance(coord, EpgDataUpdateCoordinator)
+    ]
+
+
+def _search_guide(
+    guide: Guide, search_title: str, search_channel_name: str, date_filter: str
+):
+    """Search the guide for matching programs."""
+    search_results = []
+    for channel in guide.channels():
+        if search_channel_name and channel.name() != search_channel_name:
+            continue
+        all_programmes = channel.get_programmes_per_day()
+        search_results.extend(
+            _filter_programmes(all_programmes, search_title, date_filter)
+        )
+    return search_results
+
+
+def _filter_programmes(all_programmes, search_title, date_filter):
+    """Filter programs based on the search criteria."""
+    results = []
+    for day in ["today", "tomorrow"]:
+        if date_filter in [day, "any"]:
+            for programme in all_programmes.get(day, []).values():
+                if search_title in programme.get("title").lower():
+                    results.append(_format_programme(programme, day))
+    return results
+
+
+def _format_programme(programme, day):
+    """Format a program into a result dictionary."""
+    hour, minute = map(int, programme.get("start").split(":"))
+    start_datetime_iso = (
+        (datetime.datetime.now() + timedelta(days=1 if day == "tomorrow" else 0))
+        .replace(hour=hour, minute=minute, second=0, microsecond=0)
+        .isoformat()
+    )
+    return {
+        "channel_name": programme.get("channel_name"),
+        "title": programme.get("title"),
+        "description": programme.get("desc") or "No description",
+        "start_time": programme.get("start"),
+        "end_time": programme.get("end"),
+        "date": datetime.date.today() + timedelta(1 if day == "tomorrow" else 0),
+        "start_datetime_iso": start_datetime_iso,
+    }
 
 
 def read_file(file):
