@@ -21,13 +21,7 @@ The integration now uses open-epg.com as its EPG data source. This change was im
 
 ### Installation via HACS (Recommended)
 1. Open HACS in your Home Assistant dashboard.
-2. Until this repository is part of HACS by default, you need to add it as a custom repository. (working on it)
-3. Go to *Integrations* > *Add custom repository* and enter:  ``` https://github.com/yohaybn/HomeAssistant-EPG ```
-
-
-![Adding custom repository](/images/custom_repo.png)
-
-4. Once added, search for "HomeAssistant-EPG" in HACS and install it.
+2. Search for "HomeAssistant-EPG" in HACS and install it.
 
 [![My Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=HomeAssistant-EPG&owner=yohaybn)
 
@@ -132,7 +126,6 @@ You can call this service from the Developer Tools -> Services menu in Home Assi
 service: epg.update_channels
 data:
   entry_id: a9dcc3edcdd1e421c62ea735a9747cd6 # Replace with the actual ID of your EPG config entry
-Search EPG Program Service
 ```
 
 ### Search EPG Program Service
@@ -146,7 +139,7 @@ Search EPG Program Service
 
 | Name          | Description                                                                  | Required | Example        | Selector Type |
 |---------------|------------------------------------------------------------------------------|----------|----------------|---------------|
-| `title`       | The program title (or part of it) to search for (case-insensitive).          | true     | "News at Ten"  | Text input    |
+| `title`       | The program title to search for (case-insensitive,**supports regex**).          | true     | "News at Ten"  | Text input    |
 | `channel_name`| (Optional) Filter results to only this specific channel name (exact match, case-sensitive from guide data). | false    | "BBC One HD"   | Text input    |
 | `date_filter` | (Optional) Filter results by date. 'any' includes 'today' and 'tomorrow'.  | false    | 'today'        | Select input  |
 
@@ -179,15 +172,6 @@ results:
 
 
 ```
-
-## Assist Integration
-
-You can integrate the EPG information with Home Assistant's assist feature using the following automation. **Please note that this is a basic implementation example and can be considered a "hack" to expose EPG sensor data to the Assist conversation agent.** You are free to modify the `command` triggers, the `id` of the automation, and even use a different conversation `agent_id` if you have other agents configured.
-
-To add this automation to your Home Assistant configuration, you can either:
-
-1.  **Use the Automation UI:** Go to **Settings > Automations & Scenes**, click on the **+** button to create a new automation, and then click on the three dots in the top right corner to select "Edit in YAML". Paste the YAML code below and save.
-2.  **Use configuration.yaml:** Add the automation directly to your `automations.yaml` file (or include it from your `configuration.yaml`).
 
 ## Displaying Television Programming in Lovelace
 Recommended: For a more visually appealing and feature-rich display of your EPG data, it's highly recommended to use the [Lovelace EPG Card](https://github.com/yohaybn/lovelace-epg-card).  This custom card is specifically designed to work seamlessly with the HomeAssistant-EPG integration and provides a dynamic timeline view of your TV programming.
