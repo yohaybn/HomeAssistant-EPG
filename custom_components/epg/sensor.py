@@ -1,40 +1,36 @@
 """Support for  HA_EPG."""
 
 from __future__ import annotations
-import logging
 
-from typing import Final
-import os
-from pathlib import Path
 import datetime
-from .guide_classes import Guide
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.config_entries import ConfigEntry
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Final
 
-from homeassistant.components.sensor import (
-    SensorEntity,
-)
+import aiohttp
+import pytz
+
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
 )
-
-import aiohttp
-import pytz
-
-from .const import (
-    DOMAIN,
-    ICON,
-)
-from datetime import timedelta
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
-from homeassistant.exceptions import HomeAssistantError
+
+from .const import DOMAIN, ICON
+from .guide_classes import Guide
+from datetime import timedelta
 
 # Default scan interval
 _LOGGER: Final = logging.getLogger(__name__)
@@ -300,23 +296,25 @@ def _search_guide(
             continue
         all_programmes = channel.get_programmes_per_day()
         search_results.extend(
-            _filter_programmes(all_programmes, search_title, date_filter)
+            _filter_programmes(
+                all_programmes, search_title, date_filter, channel.name()
+            )
         )
     return search_results
 
 
-def _filter_programmes(all_programmes, search_title, date_filter):
+def _filter_programmes(all_programmes, search_title, date_filter, channel_name):
     """Filter programs based on the search criteria."""
     results = []
     for day in ["today", "tomorrow"]:
         if date_filter in [day, "any"]:
             for programme in all_programmes.get(day, []).values():
-                if search_title in programme.get("title").lower():
-                    results.append(_format_programme(programme, day))
+                if re.search(search_title, programme.get("title", "").lower()):
+                    results.append(_format_programme(programme, day, channel_name))
     return results
 
 
-def _format_programme(programme, day):
+def _format_programme(programme, day, channel_name):
     """Format a program into a result dictionary."""
     hour, minute = map(int, programme.get("start").split(":"))
     start_datetime_iso = (
@@ -325,7 +323,7 @@ def _format_programme(programme, day):
         .isoformat()
     )
     return {
-        "channel_name": programme.get("channel_name"),
+        "channel_name": channel_name,
         "title": programme.get("title"),
         "description": programme.get("desc") or "No description",
         "start_time": programme.get("start"),
@@ -390,8 +388,6 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
     @property
     def available(self) -> bool:
         """Return True if coordinator has data and channel exists."""
-        # Sensor is available if the coordinator successfully updated
-        # and the specific channel data can be retrieved.
         return super().available and self._channel_data is not None
 
     @property
