@@ -32,7 +32,6 @@ from .const import DOMAIN, ICON
 from .guide_classes import Guide
 from datetime import timedelta
 
-# Default scan interval
 _LOGGER: Final = logging.getLogger(__name__)
 
 
@@ -47,7 +46,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
         self._guide: Guide | None = None
 
         # Define the update interval
-        update_interval = timedelta(hours=24)  # <--- Set your desired interval here
+        update_interval = timedelta(minutes=1)  # <--- Set your desired interval here
 
         super().__init__(
             hass,
