@@ -177,19 +177,19 @@ class Channel:
     def get_current_title(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Currently Unavilable"
+            return "Currently Unavailable"
         return p.title
 
     def get_current_desc(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Currently Unavilable"
+            return "Currently Unavailable"
         return p.desc
 
     def get_current_subtitle(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Currently Unavilable"
+            return "Currently Unavailable"
         return p.sub_title
 
 
