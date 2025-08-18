@@ -69,11 +69,14 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
         _LOGGER.debug("Coordinator: Starting data update")
         file_name = self.config_options.get("file_name")
         generated = self.config_options.get("generated", False)
-        selected_channels = "ALL" if generated else self.config_options.get("selected_channels", [])
+        selected_channels = (
+            "ALL" if generated else self.config_options.get("selected_channels", [])
+        )
         file_path = self.config_options.get("file_path")
         time_zone = await self.hass.async_add_executor_job(
             pytz.timezone, self.hass.config.time_zone
         )
+        _LOGGER.debug("time_zone is: %s", time_zone)
         if not self.need_to_update(file_path):
             try:
                 # Read file content asynchronously using executor job
@@ -214,7 +217,12 @@ async def _create_entities(coordinator, config_entry):
 
         if generated:
             entities.extend(
-                ChannelSensor(coordinator, channel.id, channel.name(), config_options)
+                ChannelSensor(
+                    coordinator,
+                    channel.id,
+                    channel.name(),
+                    config_options,
+                )
                 for channel in guide.channels()
             )
         else:
@@ -224,7 +232,10 @@ async def _create_entities(coordinator, config_entry):
                 if channel:
                     entities.append(
                         ChannelSensor(
-                            coordinator, channel.id, channel.name(), config_options
+                            coordinator,
+                            channel.id,
+                            channel.name(),
+                            config_options,
                         )
                     )
     return entities
@@ -428,5 +439,6 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
         # Add channel metadata if useful
         ret["channel_id"] = channel.id
         ret["channel_display_name"] = channel.name()
+        ret["channel_icon"] = channel.icon()
 
         return ret
