@@ -45,11 +45,12 @@ class Programme:
 class Channel:
     """Represents a TV channel with its associated programs and metadata."""
 
-    def __init__(self, id, name, lang, time_zone) -> None:
+    def __init__(self, id, name, icon, lang, time_zone) -> None:
         """Initialize the sensor."""
         self._programmes = []
         self._name = name
         self.id = id
+        self._icon = icon
         self._lang = lang
         self._time_zone = time_zone
 
@@ -58,6 +59,9 @@ class Channel:
 
     def id(self) -> str:
         return self.id
+
+    def icon(self) -> str:
+        return self._icon
 
     def add_programme(self, programme) -> None:
         """Initialize the sensor."""
@@ -173,19 +177,19 @@ class Channel:
     def get_current_title(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Unavilable"
+            return "Currently Unavilable"
         return p.title
 
     def get_current_desc(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Unavilable"
+            return "Currently Unavilable"
         return p.desc
 
     def get_current_subtitle(self) -> str:
         p = self.get_current_programme()
         if p is None:
-            return "Unavilable"
+            return "Currently Unavilable"
         return p.sub_title
 
 
@@ -200,11 +204,23 @@ class Guide:
 
         for channel in soup.find_all("channel"):
             display_name = next(channel.children)
+            lang = None
+            icon = "https://images.open-epg.com/1700.png"
             if selected_channels == "ALL" or display_name.text in selected_channels:
+                children = channel.findChildren()
+                for child in children:
+                    if child.name == "display-name":
+                        display_name = child.text[:-3]
+                        lang = child.get("lang")
+                        continue
+                    if child.name == "icon":
+                        icon = child.get("src")
+                        continue
                 _channel = Channel(
                     channel["id"],
-                    display_name.text[:-3],
-                    display_name.get("lang"),
+                    display_name,
+                    icon,
+                    lang,
                     time_zone,
                 )
                 _LOGGER.debug("setting channel %s", display_name)
