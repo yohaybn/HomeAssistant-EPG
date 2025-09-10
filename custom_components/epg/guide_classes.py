@@ -19,7 +19,9 @@ class Programme:
         self.title = title
         self.desc = desc
         self.sub_title = sub_title
-        # _LOGGER.debug(f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}")
+        _LOGGER.debug(
+            f"{self.title}\n{self.desc}\nstart: {self._start}now: {self._stop} start_hour: {self.start_hour} end_hour: {self.end_hour}"
+        )
 
     def title(self):
         """Return the title of the program."""
@@ -101,7 +103,11 @@ class Channel:
 
         now = self._time_zone.localize(datetime.now())
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        _LOGGER.debug(f"now without utc_offset: {now}")
+        _LOGGER.debug(f"utc_offset: {utc_offset}")
         now = now + timedelta(hours=utc_offset)
+
+        _LOGGER.debug(f"now with utc_offset: {now}")
         for programme in self._programmes:
             # add timezone offset to fix issue with start date is wrong day
             _start_date = (programme._start + timedelta(hours=utc_offset)).date()
@@ -121,8 +127,10 @@ class Channel:
         ret["today"] = {}
         ret["tomorrow"] = {}
         now = self._time_zone.localize(datetime.now())
-
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        _LOGGER.debug(f"utc_offset: {utc_offset}")
+        _LOGGER.debug(f"now: {now}")
+
         for programme in self._programmes:
             if programme._stop >= now:
                 _start_date = (
@@ -151,7 +159,10 @@ class Channel:
     def get_current_programme(self) -> Programme:
         now = self._time_zone.localize(datetime.now())
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        _LOGGER.debug(f"now without utc_offset: {now}")
         now = now + timedelta(hours=utc_offset)
+        _LOGGER.debug(f"utc_offset: {utc_offset}")
+        _LOGGER.debug(f"now with utc_offset: {now}")
         return next(
             (
                 programme
@@ -201,6 +212,7 @@ class Guide:
         self._channels = []
         self.TIMEZONE = time_zone
         soup = BeautifulSoup(text, "xml")
+        _LOGGER.debug(f"TIMEZONE: {time_zone}")
 
         for channel in soup.find_all("channel"):
             display_name = next(channel.children)
