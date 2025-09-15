@@ -47,7 +47,7 @@ class Programme:
 class Channel:
     """Represents a TV channel with its associated programs and metadata."""
 
-    def __init__(self, id, name, icon, lang, time_zone) -> None:
+    def __init__(self, id, name, icon, lang, time_zone, ignore_offset) -> None:
         """Initialize the sensor."""
         self._programmes = []
         self._name = name
@@ -55,6 +55,7 @@ class Channel:
         self._icon = icon
         self._lang = lang
         self._time_zone = time_zone
+        self._ignore_offset = ignore_offset
 
     def name(self) -> str:
         return self._name
@@ -103,6 +104,8 @@ class Channel:
 
         now = self._time_zone.localize(datetime.now())
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        if self._ignore_offset:
+            utc_offset = 0
         _LOGGER.debug(f"now without utc_offset: {now}")
         _LOGGER.debug(f"utc_offset: {utc_offset}")
         now = now + timedelta(hours=utc_offset)
@@ -128,6 +131,8 @@ class Channel:
         ret["tomorrow"] = {}
         now = self._time_zone.localize(datetime.now())
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        if self._ignore_offset:
+            utc_offset = 0
         _LOGGER.debug(f"utc_offset: {utc_offset}")
         _LOGGER.debug(f"now: {now}")
 
@@ -159,6 +164,8 @@ class Channel:
     def get_current_programme(self) -> Programme:
         now = self._time_zone.localize(datetime.now())
         utc_offset = now.utcoffset().total_seconds() / 60 / 60
+        if self._ignore_offset:
+            utc_offset = 0
         _LOGGER.debug(f"now without utc_offset: {now}")
         now = now + timedelta(hours=utc_offset)
         _LOGGER.debug(f"utc_offset: {utc_offset}")
@@ -207,7 +214,7 @@ class Channel:
 class Guide:
     TIMEZONE = None
 
-    def __init__(self, text, selected_channels, time_zone) -> None:
+    def __init__(self, text, selected_channels, time_zone, ignore_offset=False) -> None:
         """Initialize the class"""
         self._channels = []
         self.TIMEZONE = time_zone
@@ -229,11 +236,7 @@ class Guide:
                         icon = child.get("src")
                         continue
                 _channel = Channel(
-                    channel["id"],
-                    display_name,
-                    icon,
-                    lang,
-                    time_zone,
+                    channel["id"], display_name, icon, lang, time_zone, ignore_offset
                 )
                 _LOGGER.debug("setting channel %s", display_name)
                 for prog in soup.find_all("programme", {"channel": channel["id"]}):
