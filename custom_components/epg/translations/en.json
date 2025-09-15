@@ -5,7 +5,8 @@
         "data": {
           "file_name": "File Name (Or Generated File Code)",
           "full_schedule": "Track Full Schedule (2 Days)",
-          "generated": "Generated File Code"
+          "generated": "Generated File Code",
+          "ignore_timezone_offset": "Ignore Timezone Offset (Fix for incorrect time shift)"
         },
         "description": "Enter the file name as displayed on the [Open EPG website](https://www.open-epg.com/app/index.php). Or specify a generated file code if applicable."
       },
@@ -27,7 +28,8 @@
         "data": {
           "file_name": "File Name (Or Generated File Code) do not change!",
           "full_schedule": "Track Full Schedule (2 Days)",
-          "generated": "Generated File Code"
+          "generated": "Generated File Code",
+          "ignore_timezone_offset": "Ignore Timezone Offset (Fix for incorrect time shift)"
         },
         "description": "Enter the file name as displayed on the [Open EPG website](https://www.open-epg.com/app/index.php). Or specify a generated file code if applicable."
       },
