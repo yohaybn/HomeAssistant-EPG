@@ -73,6 +73,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
             "ALL" if generated else self.config_options.get("selected_channels", [])
         )
         file_path = self.config_options.get("file_path")
+        ignore_offset = self.config_options.get("ignore_timezone_offset")
         time_zone = await self.hass.async_add_executor_job(
             pytz.timezone, self.hass.config.time_zone
         )
@@ -91,7 +92,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
 
                 else:
                     guide = await self.hass.async_add_executor_job(
-                        Guide, local_data, selected_channels, time_zone
+                        Guide, local_data, selected_channels, time_zone, ignore_offset
                     )
                     _LOGGER.info(
                         "Successfully loaded EPG guide from local file: %s", file_path
@@ -140,7 +141,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
                 await self.hass.async_add_executor_job(write_file, file_path, data)
                 # Parse the guide data
                 guide = await self.hass.async_add_executor_job(
-                    Guide, data, selected_channels_param, time_zone
+                    Guide, data, selected_channels_param, time_zone, ignore_offset
                 )
                 _LOGGER.debug(
                     f"Coordinator: Guide parsed with {len(guide.channels()) if guide else 0} channels."
