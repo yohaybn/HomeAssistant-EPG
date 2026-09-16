@@ -29,7 +29,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     entities_to_remove =[]
     for entity in registry.entities:
         reg_entity=registry.entities.get(entity)
-        if reg_entity.config_entry_id == entry.entry_id and reg_entity.unique_id not in entry.options["selected_channels"]:
+        if (
+            reg_entity.config_entry_id == entry.entry_id
+            and reg_entity.unique_id
+            not in entry.options.get("selected_channels", [])
+        ):
             entities_to_remove.append(entity)
     try:
         for entity in entities_to_remove:

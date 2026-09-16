@@ -28,7 +28,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN, ICON
+from .const import DOMAIN, ICON, OPEN_EPG_HEADERS
 from .guide_classes import Guide
 from datetime import timedelta
 
@@ -127,7 +127,7 @@ class EpgDataUpdateCoordinator(DataUpdateCoordinator[Guide | None]):
 
         try:
             _LOGGER.debug("Coordinator: Fetching guide from %s", guide_url)
-            response = await session.get(guide_url)
+            response = await session.get(guide_url, headers=OPEN_EPG_HEADERS)
             response.raise_for_status()
             data = await response.text()
 
@@ -338,7 +338,9 @@ def _format_programme(programme, day, channel_name):
         "description": programme.get("desc") or "No description",
         "start_time": programme.get("start"),
         "end_time": programme.get("end"),
-        "date": datetime.date.today() + timedelta(1 if day == "tomorrow" else 0),
+        "date": (
+            datetime.date.today() + timedelta(1 if day == "tomorrow" else 0)
+        ).isoformat(),
         "start_datetime_iso": start_datetime_iso,
     }
 
@@ -426,6 +428,17 @@ class ChannelSensor(CoordinatorEntity[EpgDataUpdateCoordinator], SensorEntity):
         # Ensure 'desc' key exists even if description is None
         ret["desc"] = channel.get_current_desc() or "No description"
         ret["sub_title"] = channel.get_current_subtitle() or "No subtitle"
+
+        current_prog = channel.get_current_programme()
+        if current_prog:
+            ret["title"] = current_prog.title
+            ret["start_time"] = current_prog.start_hour
+            ret["end_time"] = current_prog.end_hour
+        else:
+            ret["title"] = "Unavailable"
+            ret["start_time"] = "Unavailable"
+            ret["end_time"] = "Unavailable"
+
         # Add next program info?
         next_prog = channel.get_next_programme()
         if next_prog:

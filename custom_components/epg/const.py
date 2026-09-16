@@ -30,3 +30,5 @@ CHANNEL_SCHEMA: Final = vol.Schema(
         vol.Optional(CONF_URL): cv.string,
     }
 )
+
+OPEN_EPG_HEADERS = {"User-Agent": "Mozilla/5.0"}
