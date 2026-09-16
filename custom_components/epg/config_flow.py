@@ -8,7 +8,7 @@ from typing import Final
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN
+from .const import DOMAIN, OPEN_EPG_HEADERS
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
@@ -40,7 +40,7 @@ async def fetch_channel_list(hass: HomeAssistant, url):
     """Fetch the channel_list from the URL"""
     session = async_get_clientsession(hass)
     try:
-        response = await session.get(url)
+        response = await session.get(url, headers=OPEN_EPG_HEADERS)
         response.raise_for_status()
         data = await response.text()
         return data
