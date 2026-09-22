@@ -202,21 +202,24 @@ async def _register_services(hass: HomeAssistant, config_entry: ConfigEntry):
 async def _initialize_coordinator(hass: HomeAssistant, config_entry: ConfigEntry):
     """Initialize the data update coordinator."""
     coordinator = EpgDataUpdateCoordinator(hass, config_entry, config_entry.options)
-    await coordinator.async_config_entry_first_refresh()
+    config_entry.async_create_background_task(
+        hass,
+        coordinator.async_config_entry_first_refresh(),
+        f"{DOMAIN} first refresh",
+    )
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
     return coordinator
 
 
 async def _create_entities(coordinator, config_entry):
-    """Create sensor entities based on the coordinator data."""
+    """Create sensor entities based on stored options or coordinator data."""
     entities = []
-    if coordinator.data:
-        guide: Guide = coordinator.data
-        config_options = config_entry.options
-        file_name = config_options.get("file_name")
-        generated = config_options.get("generated", False)
+    guide: Guide | None = coordinator.data
+    config_options = config_entry.options
+    generated = config_options.get("generated", False)
 
-        if generated:
+    if generated:
+        if guide:
             entities.extend(
                 ChannelSensor(
                     coordinator,
@@ -226,19 +229,18 @@ async def _create_entities(coordinator, config_entry):
                 )
                 for channel in guide.channels()
             )
-        else:
-            selected_channels_names = config_options.get("selected_channels", [])
-            for channel_name in selected_channels_names:
-                channel = guide.get_channel_by_id(channel_name)
-                if channel:
-                    entities.append(
-                        ChannelSensor(
-                            coordinator,
-                            channel.id,
-                            channel.name(),
-                            config_options,
-                        )
-                    )
+        return entities
+
+    for channel_id in config_options.get("selected_channels", []):
+        channel = guide.get_channel_by_id(channel_id) if guide else None
+        entities.append(
+            ChannelSensor(
+                coordinator,
+                channel.id if channel else channel_id,
+                channel.name() if channel else channel_id,
+                config_options,
+            )
+        )
     return entities
 
 
