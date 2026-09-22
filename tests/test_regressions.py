@@ -1,4 +1,4 @@
-"""Focused regression tests for issues #26, #46, and #47."""
+"""Focused regression tests for issues #26, #46, #47, and #49."""
 
 import ast
 import datetime
@@ -68,3 +68,27 @@ def test_current_programme_attributes_are_exposed():
         and isinstance(node.slice, ast.Constant)
     }
     assert {"title", "start_time", "end_time"} <= assigned_keys
+
+
+def test_first_refresh_runs_as_a_background_task():
+    function = _function("sensor.py", "_initialize_coordinator")
+    calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
+    assert any(
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr == "async_create_background_task"
+        for call in calls
+    )
+    assert not any(
+        isinstance(node, ast.Await)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "async_config_entry_first_refresh"
+        for node in ast.walk(function)
+    )
+
+
+def test_non_generated_entities_do_not_wait_for_coordinator_data():
+    function = _function("sensor.py", "_create_entities")
+    source = ast.unparse(function)
+    assert "config_options.get('selected_channels', [])" in source
+    assert "channel.id if channel else channel_id" in source
